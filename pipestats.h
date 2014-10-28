@@ -81,6 +81,7 @@ struct _PipeStatsClass
 };
 
 GType PipeStats_get_type (void);
+gboolean InitPipeStats(GstPlugin *plugin);
 
 G_END_DECLS
 

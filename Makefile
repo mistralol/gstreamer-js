@@ -1,10 +1,12 @@
 
 
 CC=gcc
-OBJS=pipestats.o
+OBJS=	pipestats.o \
+	internalsink.o \
+	register.o
 
 
-CFLAGS+=-fPIC -DPIC -Wall -g -ftree-vectorize -pipe -Wno-psabi
+CFLAGS+=-fPIC -DPIC -Wall -g -ftree-vectorize -pipe -Wno-psabi -ggdb
 
 CFLAGS+=-ggdb
 
@@ -19,7 +21,7 @@ gstreamer-custom.so: $(OBJS)
 
 
 clean:
-	$(RM) gst-pi.so *.o
+	$(RM) gstreamer-custom.so *.o
 
 
 

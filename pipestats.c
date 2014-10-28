@@ -411,27 +411,10 @@ static void PipeStats_class_init (PipeStatsClass *klass)
 	gst_element_class_add_pad_template (gstelement_class, gst_static_pad_template_get (&src_factory));
 }
 
-/* entry point to initialize the plug-in
- * initialize the plug-in itself
- * register the element factories and other features
- */
-static gboolean pipestats_init (GstPlugin *pipestats)
+gboolean InitPipeStats(GstPlugin *plugin)
 {
 	GST_DEBUG_CATEGORY_INIT (pipestats_debug, "pipestats", 0, "PipeStats");
-
-	return gst_element_register (pipestats, "pipestats", GST_RANK_NONE, GST_TYPE_PIPESTATS);
+	return gst_element_register (plugin, "pipestats", GST_RANK_NONE, GST_TYPE_PIPESTATS);
 }
 
-#define PACKAGE "Stev"
-GST_PLUGIN_DEFINE (
-	GST_VERSION_MAJOR,
-	GST_VERSION_MINOR,
-	pipestats,
-	"Provides Stats on the data flow though the pipeline",
-	pipestats_init,
-	"0.1",
-	"LGPL",
-	"Stev",
-	"http://www.stev.org/"
-)
 
