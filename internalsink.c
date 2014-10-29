@@ -16,7 +16,7 @@ enum
 
 enum
 {
-	PROP_INTERNAL_NAME = 1
+	PROP_STREAMNAME = 1
 };
 
 #define InternalSink_parent_class parent_class
@@ -128,7 +128,7 @@ static gboolean WriterWrite(struct InternalWriter *Writer, GstBuffer *buf)
 {
 	g_mutex_lock(&Writer->lock);
 	GList *it = Writer->Readers;
-	while(it)
+	while(it && it->data)
 	{
 		struct InternalReader *Reader = it->data;
 		if (g_async_queue_length(Reader->Queue) < 30)	//Assume overflow FIXME: Dead with this better
@@ -143,10 +143,13 @@ static gboolean WriterWrite(struct InternalWriter *Writer, GstBuffer *buf)
 
 static void InternalSink_set_property (GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
-//	InternalSink *data = GST_INTERNALSINK (object);
+	InternalSink *data = GST_INTERNALSINK (object);
 
 	switch (prop_id)
 	{
+		case PROP_STREAMNAME:
+			data->Name = g_value_dup_string(value);
+			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 			break;
@@ -155,10 +158,13 @@ static void InternalSink_set_property (GObject *object, guint prop_id, const GVa
 
 static void InternalSink_get_property (GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
-//	InternalSink *data = GST_INTERNALSINK (object);
+	InternalSink *data = GST_INTERNALSINK (object);
 
 	switch (prop_id)
 	{
+		case PROP_STREAMNAME:
+			g_value_set_string(value, data->Name);
+			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 			break;
@@ -176,7 +182,6 @@ static GstFlowReturn InternalSink_chain (GstPad *pad, GstObject *parent, GstBuff
 		return GST_FLOW_ERROR;
 	}
 
-	g_print("Chain!\n");
 	WriterWrite(data->Writer, buf);
 
 	gst_buffer_unref(buf);
@@ -190,6 +195,12 @@ static GstStateChangeReturn InternalSink_change_state(GstElement *element, GstSt
 
 	if (GST_IS_INTERNALSINK(element) == FALSE)
 		return GST_FLOW_ERROR;
+
+	if (data->Name == NULL || g_strcmp0(data->Name, "") == 0)
+	{
+		GST_ERROR("streamname property is not set");
+		return GST_FLOW_ERROR;
+	}
 
 	switch(transition)
 	{
@@ -241,6 +252,17 @@ static void InternalSink_init (InternalSink *data)
 	data->Writer = NULL;
 }
 
+static void InternalSink_Finalize(GObject *object)
+{
+	InternalSink *data = GST_INTERNALSINK(object);
+
+	if (data->Name)
+	{
+		g_free(data->Name);
+	}
+
+}
+
 static void InternalSink_class_init (InternalSinkClass *klass)
 {
 	GObjectClass *gobject_class;
@@ -249,13 +271,15 @@ static void InternalSink_class_init (InternalSinkClass *klass)
 	gobject_class = (GObjectClass *) klass;
 	gstelement_class = (GstElementClass *) klass;
 
+
+	gobject_class->finalize = InternalSink_Finalize;
 	gobject_class->set_property = InternalSink_set_property;
 	gobject_class->get_property = InternalSink_get_property;
 
 	gstelement_class->change_state = InternalSink_change_state;
 
-	//g_object_class_install_property (gobject_class, PROP_SILENT,
-	//	g_param_spec_boolean ("silent", "Silent", "Produce Output about stas on stdout", FALSE, G_PARAM_READWRITE));
+	g_object_class_install_property (gobject_class, PROP_STREAMNAME,
+		g_param_spec_string ("streamname", "streamname", "The stream name for the source element to connect to", "", G_PARAM_READWRITE));
 
 
 	gst_element_class_set_details_simple(gstelement_class,
