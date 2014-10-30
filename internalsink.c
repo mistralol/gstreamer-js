@@ -16,7 +16,8 @@ enum
 
 enum
 {
-	PROP_STREAMNAME = 1
+	PROP_STREAMNAME = 1,
+	PROP_MAXQUEUESIZE
 };
 
 #define InternalSink_parent_class parent_class
@@ -124,14 +125,14 @@ static void WriterRemove(InternalSink *data)
 	G_UNLOCK(WriterList);
 };
 
-static gboolean WriterWrite(struct InternalWriter *Writer, GstBuffer *buf)
+static gboolean WriterWrite(InternalSink *data, struct InternalWriter *Writer, GstBuffer *buf)
 {
 	g_mutex_lock(&Writer->lock);
 	GList *it = Writer->Readers;
 	while(it && it->data)
 	{
 		struct InternalReader *Reader = it->data;
-		if (g_async_queue_length(Reader->Queue) < 30)	//Assume overflow FIXME: Dead with this better
+		if (g_async_queue_length(Reader->Queue) < data->maxqueuesize)	//Assume overflow FIXME: Deal with this better
 			g_async_queue_push(Reader->Queue, buf);
 		it = it->next;
 	}
@@ -150,6 +151,8 @@ static void InternalSink_set_property (GObject *object, guint prop_id, const GVa
 		case PROP_STREAMNAME:
 			data->Name = g_value_dup_string(value);
 			break;
+		case PROP_MAXQUEUESIZE:
+			data->maxqueuesize = g_value_get_int(value);
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 			break;
@@ -164,6 +167,9 @@ static void InternalSink_get_property (GObject *object, guint prop_id, GValue *v
 	{
 		case PROP_STREAMNAME:
 			g_value_set_string(value, data->Name);
+			break;
+		case PROP_MAXQUEUESIZE:
+			g_value_set_int(value, data->maxqueuesize);
 			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -182,7 +188,7 @@ static GstFlowReturn InternalSink_chain (GstPad *pad, GstObject *parent, GstBuff
 		return GST_FLOW_ERROR;
 	}
 
-	WriterWrite(data->Writer, buf);
+	WriterWrite(data, data->Writer, buf);
 
 	gst_buffer_unref(buf);
 	return GST_FLOW_OK;
@@ -280,6 +286,9 @@ static void InternalSink_class_init (InternalSinkClass *klass)
 
 	g_object_class_install_property (gobject_class, PROP_STREAMNAME,
 		g_param_spec_string ("streamname", "streamname", "The stream name for the source element to connect to", "", G_PARAM_READWRITE));
+
+	g_object_class_install_property (gobject_class, PROP_MAXQUEUESIZE,
+		g_param_spec_int ("maxqueuesize", "maxqueuesize", "Max number of buffers to store in the reciver queue", 1, 30, 100, G_PARAM_READWRITE));
 
 
 	gst_element_class_set_details_simple(gstelement_class,
