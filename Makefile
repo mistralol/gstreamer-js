@@ -7,9 +7,7 @@ OBJS=	pipestats.o \
 	register.o
 
 
-CFLAGS+=-fPIC -DPIC -Wall -g -ftree-vectorize -pipe -Wno-psabi -ggdb
-
-CFLAGS+=-ggdb
+CFLAGS+=-fPIC -DPIC -Wall -ggdb -pipe
 
 all: gstreamer-custom.so
 
