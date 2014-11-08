@@ -3,6 +3,7 @@
 
 #include "pipestats.h"
 #include "internalsink.h"
+#include "dropdeltas.h"
 
 
 static gboolean Register_init (GstPlugin *data)
@@ -11,6 +12,9 @@ static gboolean Register_init (GstPlugin *data)
 		return FALSE;
 
 	if (InitInternalSink(data) == FALSE)
+		return FALSE;
+
+	if (InitDropDeltas(data) == FALSE)
 		return FALSE;
 
 	return TRUE;

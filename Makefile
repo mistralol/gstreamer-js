@@ -3,6 +3,7 @@
 CC=gcc
 OBJS=	pipestats.o \
 	internalsink.o \
+	dropdeltas.o \
 	register.o
 
 
