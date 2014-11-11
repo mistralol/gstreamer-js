@@ -322,6 +322,29 @@ static GstFlowReturn PipeStats_chain (GstPad *pad, GstObject *parent, GstBuffer 
 	return gst_pad_push (stats->srcpad, buf);
 }
 
+static gboolean PipeStats_event (GstPad *pad, GstObject *parent, GstEvent  *event)
+{
+	PipeStats* stats = GST_PIPESTATS(gst_pad_get_parent (pad));
+	gboolean ret = FALSE;
+
+	switch (GST_EVENT_TYPE (event)) {
+		case GST_EVENT_CAPS: /* Simply forward caps */
+		{
+			GstCaps *caps = NULL;
+
+			gst_event_parse_caps (event, &caps);
+			GstCaps *ncaps = gst_caps_copy(caps);
+			ret = gst_pad_set_caps(stats->srcpad, ncaps);
+			gst_caps_unref(ncaps);
+			break;
+		}
+		default:
+			ret = gst_pad_event_default (pad, parent, event);
+			break;
+	}
+
+	return ret;
+}
 
 /* initialize the new element
  * instantiate pads and add them to element
@@ -332,6 +355,8 @@ static void PipeStats_init (PipeStats *stats)
 {
 	stats->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
 	stats->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
+
+	gst_pad_set_event_function (stats->sinkpad, PipeStats_event);
 
 	gst_pad_set_chain_function (stats->sinkpad, PipeStats_chain);
 
@@ -407,8 +432,8 @@ static void PipeStats_class_init (PipeStatsClass *klass)
 		"James Stevenson <james@stev.org>"
 	);
 
-	gst_element_class_add_pad_template (gstelement_class, gst_static_pad_template_get (&sink_factory));
 	gst_element_class_add_pad_template (gstelement_class, gst_static_pad_template_get (&src_factory));
+	gst_element_class_add_pad_template (gstelement_class, gst_static_pad_template_get (&sink_factory));
 }
 
 gboolean InitPipeStats(GstPlugin *plugin)
