@@ -131,7 +131,8 @@ static GstFlowReturn ClockDrift_chain (GstPad *pad, GstObject *parent, GstBuffer
 		return GST_FLOW_ERROR;
 	}
 
-	if (diff < 0 && this->error_drift - diff < 0)
+	//Be aware that this->error_drift + diff is really always a subtraction since we are adding a negitive number
+	if (diff < 0 && this->error_drift + diff < 0)
 	{
 		GST_ERROR("ERROR_DRIFT2 Exceeded: %d > %d", -diff, this->error_drift);
 		gst_buffer_unref(buf);
