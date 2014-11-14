@@ -12,7 +12,7 @@ CFLAGS+=-fPIC -DPIC -Wall -ggdb -pipe
 all: gstreamer-custom.so
 
 %.o: %.c *.h
-	$(CC) $(CFLAGS) $(INCLUDES) -g -c $< -o $@ -Wno-deprecated-declarations `pkg-config --cflags gstreamer-1.0`
+	$(CC) $(CFLAGS) -c $< -o $@ -Wno-deprecated-declarations `pkg-config --cflags gstreamer-1.0`
 
 
 gstreamer-custom.so: $(OBJS)
