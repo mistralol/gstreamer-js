@@ -1,0 +1,10 @@
+
+Type make
+
+then setup the enviroment using 
+
+export GST_PLUGIN_PATH=`pwd`
+
+
+
+
