@@ -223,9 +223,6 @@ static void ClockDrift_class_init (ClockDriftClass *klass)
 	g_object_class_install_property (gobject_class, PROP_MAX_DRIFT,
 		g_param_spec_int ("max_drift", "max_drift", "Get the maximum drift value seen in ms", 0, G_MAXINT, G_MAXINT, G_PARAM_READABLE));
 
-	g_object_class_install_property (gobject_class, PROP_MAX_DRIFT,
-		g_param_spec_int ("max_drift", "max_drift", "Get the maximum drift value seen in ms", 0, G_MAXINT, G_MAXINT, G_PARAM_READABLE));
-
 	g_object_class_install_property (gobject_class, PROP_ERROR_DRIFT,
 		g_param_spec_int ("error_drift", "error_drift", "Fail if the drift is more than this value in ms", G_MAXINT, G_MAXINT, G_MAXINT, G_PARAM_READABLE));
 
