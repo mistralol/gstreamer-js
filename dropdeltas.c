@@ -2,8 +2,6 @@
 #include <gst/gst.h>
 #include <stdlib.h>
 
-#include <time.h>
-
 #include "dropdeltas.h"
 
 GST_DEBUG_CATEGORY_STATIC (dropdeltas_debug);
