@@ -288,7 +288,7 @@ static void InternalSink_class_init (InternalSinkClass *klass)
 		g_param_spec_string ("streamname", "streamname", "The stream name for the source element to connect to", "", G_PARAM_READWRITE));
 
 	g_object_class_install_property (gobject_class, PROP_MAXQUEUESIZE,
-		g_param_spec_int ("maxqueuesize", "maxqueuesize", "Max number of buffers to store in the reciver queue", 1, 30, 100, G_PARAM_READWRITE));
+		g_param_spec_int ("maxqueuesize", "maxqueuesize", "Max number of buffers to store in the reciver queue", 1, 100, 100, G_PARAM_READWRITE));
 
 
 	gst_element_class_set_details_simple(gstelement_class,
