@@ -4,6 +4,7 @@
 #include "pipestats.h"
 #include "internalsink.h"
 #include "dropdeltas.h"
+#include "drop2key.h"
 #include "clockdrift.h"
 
 
@@ -16,6 +17,9 @@ static gboolean Register_init (GstPlugin *data)
 		return FALSE;
 
 	if (InitDropDeltas(data) == FALSE)
+		return FALSE;
+
+	if (InitDrop2Key(data) == FALSE)
 		return FALSE;
 
 	if (InitClockDrift(data) == FALSE)

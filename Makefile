@@ -4,6 +4,7 @@ CC=gcc
 OBJS=	pipestats.o \
 	internalsink.o \
 	dropdeltas.o \
+	drop2key.o \
 	clockdrift.o \
 	register.o
 
