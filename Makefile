@@ -10,15 +10,18 @@ OBJS=	pipestats.o \
 
 
 CFLAGS+=-fPIC -DPIC -Wall -ggdb -pipe
+CFLAGS+=$(shell pkg-config --cflags gstreamer-1.0)
+
+LIBS+=$(shell pkg-config --libs gstreamer-1.0)
 
 all: gstreamer-custom.so
 
 %.o: %.c *.h
-	$(CC) $(CFLAGS) -c $< -o $@ -Wno-deprecated-declarations `pkg-config --cflags gstreamer-1.0`
+	$(CC) $(CFLAGS) -c $< -o $@ -Wno-deprecated-declarations 
 
 
 gstreamer-custom.so: $(OBJS)
-	$(CC) -shared -o $@ $(OBJS) $(LDFLAGS) `pkg-config --libs gstreamer-1.0`
+	$(CC) -shared -o $@ $(OBJS) $(LIBS)
 
 
 clean:
