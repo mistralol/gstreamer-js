@@ -6,6 +6,7 @@ OBJS=	pipestats.o \
 	dropdeltas.o \
 	drop2key.o \
 	clockdrift.o \
+	bufferjitter.o \
 	register.o
 
 
