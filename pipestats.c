@@ -1,4 +1,5 @@
 
+#include <glib.h>
 #include <gst/gst.h>
 #include <stdlib.h>
 
