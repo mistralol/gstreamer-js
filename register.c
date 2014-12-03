@@ -7,6 +7,7 @@
 #include "drop2key.h"
 #include "clockdrift.h"
 #include "bufferjitter.h"
+#include "bufferspike.h"
 
 
 static gboolean Register_init (GstPlugin *data)
@@ -27,6 +28,9 @@ static gboolean Register_init (GstPlugin *data)
 		return FALSE;
 
 	if (InitBufferJitter(data) == FALSE)
+		return FALSE;
+
+	if (InitBufferSpike(data) == FALSE)
 		return FALSE;
 
 	return TRUE;
