@@ -36,6 +36,7 @@ struct _BufferSpike
 	guint32 range_start;
 	guint32 range_end;
 	guint32 probability;
+	guint8 value;
 };
 
 struct _BufferSpikeClass 

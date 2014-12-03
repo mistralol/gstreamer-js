@@ -19,7 +19,8 @@ enum
 	PROP_SILENT = 1,
 	PROP_RANGE_START,
 	PROP_RANGE_END,
-	PROP_PROBABILITY
+	PROP_PROBABILITY,
+	PROP_VALUE
 };
 
 #define bufferspike_parent_class parent_class
@@ -54,6 +55,9 @@ static void BufferSpike_set_property (GObject *object, guint prop_id, const GVal
 		case PROP_PROBABILITY:
 			this->probability = g_value_get_uint(value);
 			break;
+		case PROP_VALUE:
+			this->value = g_value_get_uint(value);
+			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 			break;
@@ -73,6 +77,9 @@ static void BufferSpike_get_property (GObject *object, guint prop_id, GValue *va
 			break;
 		case PROP_PROBABILITY:
 			g_value_set_uint(value, this->probability);
+			break;
+		case PROP_VALUE:
+			g_value_set_uint(value, this->value);
 			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -173,6 +180,7 @@ static void BufferSpike_init (BufferSpike *this)
 	this->range_start = 0;
 	this->range_end = G_MAXUINT;
 	this->probability = 0;
+	this->value = 0;
 }
 
 static void BufferSpike_Finalize(GObject *object)
@@ -203,6 +211,9 @@ static void BufferSpike_class_init (BufferSpikeClass *klass)
 
 	g_object_class_install_property (gobject_class, PROP_PROBABILITY,
 		g_param_spec_uint ("probability", "probability", "Chance of a buffer being spiked", 0, 100, 0, G_PARAM_READWRITE));
+
+	g_object_class_install_property (gobject_class, PROP_VALUE,
+		g_param_spec_uint ("value", "value", "Value to spike buffer with", 0, 255, 0, G_PARAM_READWRITE));
 
 
 	gst_element_class_set_details_simple(gstelement_class,
