@@ -32,7 +32,6 @@ struct _InternalSink
 
 	gchar *Name;
 	struct InternalWriter *Writer;
-	gint maxqueuesize;
 };
 
 struct _InternalSinkClass 

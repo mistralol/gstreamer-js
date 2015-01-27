@@ -4,11 +4,6 @@
 #define __GST_INTERNALCOMMON_H__
 
 
-//Mutex For Global List
-//global List
-//Global Count
-
-//extern glist *InternalList;
 
 struct InternalWriter
 {
@@ -22,7 +17,13 @@ struct InternalReader
 {
 	struct InternalWriter *Writer; //The current Writer struct this is a member of
 	GAsyncQueue *Queue;
+	guint MaxQueue;
+	guint Dropped;
 };
+
+extern struct InternalWriter *InternalWriterAttach(const gchar *Name, gboolean alloc);
+extern void InternalWriterWrite(struct InternalWriter *Writer, GstBuffer *buf);
+extern void InternalWriterFree(struct InternalWriter *Writer);
 
 #endif
 

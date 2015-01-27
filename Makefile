@@ -2,8 +2,10 @@
 
 CC=gcc
 OBJS=	pipestats.o \
-	internalsink.o \
 	dropdeltas.o \
+	internalsink.o \
+	internalsrc.o \
+	internalcommon.o \
 	drop2key.o \
 	clockdrift.o \
 	bufferjitter.o \
