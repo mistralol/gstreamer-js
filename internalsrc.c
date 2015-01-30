@@ -17,7 +17,8 @@ enum
 enum
 {
 	PROP_STREAMNAME = 1,
-	PROP_MAXQUEUESIZE
+	PROP_MAXQUEUESIZE,
+	PROP_TIMEOUT
 };
 
 #define InternalSrc_parent_class parent_class
@@ -43,6 +44,9 @@ static void InternalSrc_set_property (GObject *object, guint prop_id, const GVal
 		case PROP_MAXQUEUESIZE:
 			data->MaxQueue = g_value_get_uint(value);
 			break;
+		case PROP_TIMEOUT:
+			data->Timeout = g_value_get_uint64(value);
+			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 			break;
@@ -61,6 +65,9 @@ static void InternalSrc_get_property (GObject *object, guint prop_id, GValue *va
 		case PROP_MAXQUEUESIZE:
 			g_value_set_uint(value, data->MaxQueue);
 			break;
+		case PROP_TIMEOUT:
+			g_value_set_uint64(value, data->Timeout);
+			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 			break;
@@ -69,7 +76,22 @@ static void InternalSrc_get_property (GObject *object, guint prop_id, GValue *va
 
 static void InternalSrc_Task(gpointer user_data)
 {
-	//InternalSrc *data = (InternalSrc *) user_data;
+	InternalSrc *data = (InternalSrc *) user_data;
+	GstBuffer *buf = NULL;
+
+	g_print("Running\n");
+	InternalReaderRead(data->Reader, &buf);
+	if (buf == NULL)
+	{
+		g_print("WTF? No Buffer?");
+		//FIXME: Send EOS
+		return;
+	}
+
+	//FIXME: Compare and send caps
+	//FIXME: Send buffer
+	//FIXME: Free buffer
+	gst_buffer_unref(buf);
 }
 
 
@@ -89,8 +111,11 @@ static GstStateChangeReturn InternalSrc_change_state(GstElement *element, GstSta
 
 	switch(transition)
 	{
-		case GST_STATE_CHANGE_NULL_TO_READY:
-			//FIXME: Attach
+		case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
+			data->Reader = InternalReaderAttach(data->Name);
+			if (!data->Reader)
+				return GST_STATE_CHANGE_FAILURE;
+			gst_task_start(data->task);
 			break;
 		default:
 			break;
@@ -102,9 +127,11 @@ static GstStateChangeReturn InternalSrc_change_state(GstElement *element, GstSta
 
 	switch(transition)
 	{
-		case GST_STATE_CHANGE_READY_TO_NULL:
-			//FIXME: Free
+		case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
+			gst_task_stop(data->task);
 			gst_task_join(data->task);
+			InternalReaderFree(data->Reader);
+			data->Reader = NULL;
 			break;
 		default:
 			break;
@@ -128,6 +155,7 @@ static void InternalSrc_init (InternalSrc *data)
 	data->Name = NULL;
 	data->Reader = NULL;
 	data->MaxQueue = 15;
+	data->Timeout = 5000;
 
 	data->task = gst_task_new(InternalSrc_Task, data, NULL);
 	
@@ -161,8 +189,12 @@ static void InternalSrc_class_init (InternalSrcClass *klass)
 
 	g_object_class_install_property (gobject_class, PROP_STREAMNAME,
 		g_param_spec_string ("streamname", "streamname", "The stream name for the source element to connect to", "", G_PARAM_READWRITE));
+
 	g_object_class_install_property (gobject_class, PROP_MAXQUEUESIZE,
 		g_param_spec_uint ("maxqueue", "maxqueue", "Max backlog in the queue for this reader", 1, G_MAXUINT, 15, G_PARAM_READWRITE));
+
+	g_object_class_install_property (gobject_class, PROP_TIMEOUT,
+		g_param_spec_uint64 ("timeout", "timeout", "Timeout for reading in ms", 0, G_MAXUINT64, 5000, G_PARAM_READWRITE));
 
 	gst_element_class_set_details_simple(gstelement_class,
 		"InternalSrc",

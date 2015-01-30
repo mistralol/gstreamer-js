@@ -33,6 +33,7 @@ struct _InternalSrc
 	gchar *Name;
 	struct InternalReader *Reader;
 	guint MaxQueue;
+	guint64 Timeout;
 	GstTask *task;
 };
 

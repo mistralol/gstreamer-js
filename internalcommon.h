@@ -19,11 +19,16 @@ struct InternalReader
 	GAsyncQueue *Queue;
 	guint MaxQueue;
 	guint Dropped;
+	guint64 Timeout;
 };
 
 extern struct InternalWriter *InternalWriterAttach(const gchar *Name, gboolean alloc);
 extern void InternalWriterWrite(struct InternalWriter *Writer, GstBuffer *buf);
 extern void InternalWriterFree(struct InternalWriter *Writer);
+
+extern struct InternalReader *InternalReaderAttach(const gchar *Name);
+extern void InternalReaderRead(struct InternalReader *Reader, GstBuffer **buf);
+extern void InternalReaderFree(struct InternalReader *Reader);
 
 #endif
 

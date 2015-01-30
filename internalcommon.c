@@ -109,4 +109,58 @@ void InternalWriterFree(struct InternalWriter *Writer)
 	G_UNLOCK(WriterLock);
 }
 
+struct InternalReader *InternalReaderAttach(const gchar *Name)
+{
+	struct InternalWriter *Writer = InternalWriterAttach(Name, FALSE);
+
+	if (Writer == NULL)
+	{
+		return NULL;
+	}
+
+	struct InternalReader *Reader = g_new(struct InternalReader, 1);
+	if (Reader == NULL)
+	{
+		InternalWriterFree(Writer);
+		return NULL;
+	}
+
+
+	Reader->Writer = Writer;
+	Reader->Queue = g_async_queue_new();
+	Reader->MaxQueue = 15; //FIXME: Get Limits from Element
+	Reader->Dropped = 0;
+	Reader->Timeout = 5000; //FIXME: Get Timeout from Element
+
+	g_mutex_lock(&Writer->lock);
+	Writer->Readers = g_list_append(Writer->Readers, Reader);
+	g_mutex_unlock(&Writer->lock);
+
+	return Reader;
+}
+
+void InternalReaderRead(struct InternalReader *Reader, GstBuffer **buf)
+{
+	*buf = g_async_queue_timeout_pop(Reader->Queue, Reader->Timeout);
+}
+
+void InternalReaderFree(struct InternalReader *Reader)
+{
+	//Unregister
+	g_mutex_lock(&Reader->Writer->lock);
+	Reader->Writer->Readers = g_list_remove(Reader->Writer->Readers, Reader);
+	g_mutex_unlock(&Reader->Writer->lock);
+
+	//Pop All and Free Buffers
+	while(g_async_queue_length(Reader->Queue))
+	{
+		GstBuffer *buf = g_async_queue_pop(Reader->Queue);
+		gst_buffer_unref(buf);
+	}
+
+	g_async_queue_unref(Reader->Queue);
+	g_free(Reader);
+}
+
+
 
