@@ -83,7 +83,6 @@ static void InternalSrc_get_property (GObject *object, guint prop_id, GValue *va
  */
 static void InternalSrc_init (InternalSrc *data)
 {
-	g_print("Init\n");
 	data->Name = NULL;
 	data->Reader = NULL;
 	data->MaxQueue = 15;
@@ -129,8 +128,6 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 	{
 		if (gst_base_src_set_caps(base, caps) == FALSE)
 		{
-
-			g_print("Failed to set caps1\n");
 			gst_sample_unref(sample);
 			return GST_FLOW_ERROR;
 		}
@@ -141,7 +138,6 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 		{
 			if (gst_base_src_set_caps(base, caps) == FALSE)
 			{
-				g_print("Failed to set caps\n");
 				gst_caps_unref(ccaps);
 				gst_sample_unref(sample);
 				return GST_FLOW_ERROR;
@@ -155,7 +151,6 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 	GST_BUFFER_DTS(*buf) = GST_CLOCK_TIME_NONE;
 
 	gst_sample_unref(sample);
-	g_print("Gave Buffer\n");
 	return GST_FLOW_OK;
 }
 
@@ -188,7 +183,6 @@ static GstStateChangeReturn InternalSrc_change_state(GstElement *element, GstSta
 	switch(transition)
 	{
 		case GST_STATE_CHANGE_READY_TO_NULL:
-			g_print("Doing Detacth\n");
 			if (data->Reader != NULL)
 			{
 				InternalReaderFree(data->Reader);
