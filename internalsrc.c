@@ -1,6 +1,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/base/gstpushsrc.h>
 
 #include "internalcommon.h"
 #include "internalsrc.h"
@@ -21,16 +22,16 @@ enum
 	PROP_TIMEOUT
 };
 
-#define InternalSrc_parent_class parent_class
-G_DEFINE_TYPE (InternalSrc, InternalSrc, GST_TYPE_ELEMENT);
-
-
-static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE (
+/* Define src and src pad capabilities. */
+static GstStaticPadTemplate src = GST_STATIC_PAD_TEMPLATE(
 	"src",
-    GST_PAD_SRC,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("ANY")
+	GST_PAD_SRC,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS("ANY")
 );
+
+#define InternalSrc_parent_class parent_class
+G_DEFINE_TYPE (InternalSrc, InternalSrc, GST_TYPE_PUSH_SRC);
 
 static void InternalSrc_set_property (GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
@@ -42,7 +43,7 @@ static void InternalSrc_set_property (GObject *object, guint prop_id, const GVal
 			data->Name = g_value_dup_string(value);
 			break;
 		case PROP_MAXQUEUESIZE:
-			data->MaxQueue = g_value_get_uint(value);
+			data->MaxQueue = g_value_get_int(value);
 			break;
 		case PROP_TIMEOUT:
 			data->Timeout = g_value_get_uint64(value);
@@ -63,7 +64,7 @@ static void InternalSrc_get_property (GObject *object, guint prop_id, GValue *va
 			g_value_set_string(value, data->Name);
 			break;
 		case PROP_MAXQUEUESIZE:
-			g_value_set_uint(value, data->MaxQueue);
+			g_value_set_int(value, data->MaxQueue);
 			break;
 		case PROP_TIMEOUT:
 			g_value_set_uint64(value, data->Timeout);
@@ -74,26 +75,89 @@ static void InternalSrc_get_property (GObject *object, guint prop_id, GValue *va
 	}
 }
 
-static void InternalSrc_Task(gpointer user_data)
+
+/* initialize the new element
+ * instantiate pads and add them to element
+ * set pad calback functions
+ * initialize instance structure
+ */
+static void InternalSrc_init (InternalSrc *data)
 {
-	InternalSrc *data = (InternalSrc *) user_data;
-	GstBuffer *buf = NULL;
-
-	g_print("Running\n");
-	InternalReaderRead(data->Reader, &buf);
-	if (buf == NULL)
-	{
-		g_print("WTF? No Buffer?");
-		//FIXME: Send EOS
-		return;
-	}
-
-	//FIXME: Compare and send caps
-	//FIXME: Send buffer
-	//FIXME: Free buffer
-	gst_buffer_unref(buf);
+	g_print("Init\n");
+	data->Name = NULL;
+	data->Reader = NULL;
+	data->MaxQueue = 15;
+	data->Timeout = 5000;
 }
 
+/* ask the subclass to create a buffer, the default implementation
+ * uses alloc and fill */
+GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
+{
+	InternalSrc *data = GST_INTERNALSRC(src);
+	GstBaseSrc *base = &src->parent;
+
+	if (data->Reader == NULL)
+	{
+		data->Reader = InternalReaderAttach(data->Name);
+		if (data->Reader == NULL)
+		{
+			return GST_FLOW_ERROR;
+		}
+	}
+
+	GstSample *sample = NULL;
+	InternalReaderRead(data->Reader, &sample);
+	if (sample == NULL)
+	{
+		return GST_FLOW_ERROR;
+	}
+
+	GstBuffer *tmp = gst_sample_get_buffer(sample); //unref of gstbuffer is not required
+	GstCaps *caps = gst_sample_get_caps(sample);
+	*buf = gst_buffer_copy(tmp);
+
+	if (caps == NULL)
+	{
+		gst_sample_unref(sample);
+		return GST_FLOW_ERROR;
+	}
+
+	//Compare and send new caps if required
+	GstCaps *ccaps = gst_pad_get_current_caps(GST_BASE_SRC_PAD(base));
+	if (ccaps == NULL)
+	{
+		if (gst_base_src_set_caps(base, caps) == FALSE)
+		{
+
+			g_print("Failed to set caps1\n");
+			gst_sample_unref(sample);
+			return GST_FLOW_ERROR;
+		}
+	}
+	else
+	{
+		if (gst_caps_is_equal(ccaps, caps) == FALSE)
+		{
+			if (gst_base_src_set_caps(base, caps) == FALSE)
+			{
+				g_print("Failed to set caps\n");
+				gst_caps_unref(ccaps);
+				gst_sample_unref(sample);
+				return GST_FLOW_ERROR;
+			}
+			gst_caps_unref(ccaps);
+		}
+	}
+
+	//TODO: Sort out timestamp blocking issue for zero copy
+	GST_BUFFER_PTS(*buf) = GST_CLOCK_TIME_NONE;
+	GST_BUFFER_DTS(*buf) = GST_CLOCK_TIME_NONE;
+
+	gst_sample_unref(sample);
+	g_print("Gave Buffer\n");
+	return GST_FLOW_OK;
+}
 
 static GstStateChangeReturn InternalSrc_change_state(GstElement *element, GstStateChange transition)
 {
@@ -111,11 +175,7 @@ static GstStateChangeReturn InternalSrc_change_state(GstElement *element, GstSta
 
 	switch(transition)
 	{
-		case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
-			data->Reader = InternalReaderAttach(data->Name);
-			if (!data->Reader)
-				return GST_STATE_CHANGE_FAILURE;
-			gst_task_start(data->task);
+		case GST_STATE_CHANGE_NULL_TO_READY:
 			break;
 		default:
 			break;
@@ -127,11 +187,13 @@ static GstStateChangeReturn InternalSrc_change_state(GstElement *element, GstSta
 
 	switch(transition)
 	{
-		case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
-			gst_task_stop(data->task);
-			gst_task_join(data->task);
-			InternalReaderFree(data->Reader);
-			data->Reader = NULL;
+		case GST_STATE_CHANGE_READY_TO_NULL:
+			g_print("Doing Detacth\n");
+			if (data->Reader != NULL)
+			{
+				InternalReaderFree(data->Reader);
+				data->Reader = NULL;
+			}
 			break;
 		default:
 			break;
@@ -141,26 +203,6 @@ static GstStateChangeReturn InternalSrc_change_state(GstElement *element, GstSta
 }
 
 
-/* initialize the new element
- * instantiate pads and add them to element
- * set pad calback functions
- * initialize instance structure
- */
-static void InternalSrc_init (InternalSrc *data)
-{
-	data->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
-
-	gst_element_add_pad (GST_ELEMENT (data), data->srcpad);
-
-	data->Name = NULL;
-	data->Reader = NULL;
-	data->MaxQueue = 15;
-	data->Timeout = 5000;
-
-	data->task = gst_task_new(InternalSrc_Task, data, NULL);
-	
-}
-
 static void InternalSrc_Finalize(GObject *object)
 {
 	InternalSrc *data = GST_INTERNALSRC(object);
@@ -169,41 +211,43 @@ static void InternalSrc_Finalize(GObject *object)
 	{
 		g_free(data->Name);
 	}
-	gst_object_unref(data->task);
 }
 
 static void InternalSrc_class_init (InternalSrcClass *klass)
 {
 	GObjectClass *gobject_class;
-	GstElementClass *gstelement_class;
+	GstElementClass *element_class;
+	GstPushSrcClass *pushsrc_class;
 
-	gobject_class = (GObjectClass *) klass;
-	gstelement_class = (GstElementClass *) klass;
-
+	gobject_class = G_OBJECT_CLASS(klass);
+	element_class = GST_ELEMENT_CLASS(klass);
+	pushsrc_class = GST_PUSH_SRC_CLASS(klass);
 
 	gobject_class->finalize = InternalSrc_Finalize;
 	gobject_class->set_property = InternalSrc_set_property;
 	gobject_class->get_property = InternalSrc_get_property;
 
-	gstelement_class->change_state = InternalSrc_change_state;
+	element_class->change_state = InternalSrc_change_state;
+
+	pushsrc_class->create = InternalSrcCreate;
 
 	g_object_class_install_property (gobject_class, PROP_STREAMNAME,
 		g_param_spec_string ("streamname", "streamname", "The stream name for the source element to connect to", "", G_PARAM_READWRITE));
 
 	g_object_class_install_property (gobject_class, PROP_MAXQUEUESIZE,
-		g_param_spec_uint ("maxqueue", "maxqueue", "Max backlog in the queue for this reader", 1, G_MAXUINT, 15, G_PARAM_READWRITE));
+		g_param_spec_int ("maxqueue", "maxqueue", "Max backlog in the queue for this reader", 1, G_MAXINT, 15, G_PARAM_READWRITE));
 
 	g_object_class_install_property (gobject_class, PROP_TIMEOUT,
 		g_param_spec_uint64 ("timeout", "timeout", "Timeout for reading in ms", 0, G_MAXUINT64, 5000, G_PARAM_READWRITE));
 
-	gst_element_class_set_details_simple(gstelement_class,
+	gst_element_class_set_details_simple(element_class,
 		"InternalSrc",
 		"InternalSrc",
 		"Provides a Src element for getting data from internalsink",
 		"James Stevenson <james@stev.org>"
 	);
 
-	gst_element_class_add_pad_template (gstelement_class, gst_static_pad_template_get (&src_factory));
+	gst_element_class_add_pad_template (element_class, gst_static_pad_template_get (&src));
 }
 
 gboolean InitInternalSrc(GstPlugin *plugin)
@@ -211,6 +255,4 @@ gboolean InitInternalSrc(GstPlugin *plugin)
 	GST_DEBUG_CATEGORY_INIT (internalsrc_debug, "internalsrc", 0, "InternalSrc");
 	return gst_element_register (plugin, "internalsrc", GST_RANK_NONE, GST_TYPE_INTERNALSRC);
 }
-
-
 

@@ -1,5 +1,6 @@
 
 #include <gst/gst.h>
+#include <gst/base/gstpushsrc.h>
 
 #include "pipestats.h"
 #include "internalsink.h"

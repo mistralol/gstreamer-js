@@ -71,10 +71,40 @@ static GstFlowReturn InternalSink_chain (GstPad *pad, GstObject *parent, GstBuff
 		return GST_FLOW_ERROR;
 	}
 
-	InternalWriterWrite(data->Writer, buf);
+	GstSample *sample = gst_sample_new(buf, data->caps, NULL, NULL);
+	InternalWriterWrite(data->Writer, sample);
+	gst_sample_unref(sample);
 
 	gst_buffer_unref(buf);
 	return GST_FLOW_OK;
+}
+
+static gboolean InternalSink_event (GstPad *pad, GstObject *parent, GstEvent  *event)
+{
+	InternalSink *data = GST_INTERNALSINK(gst_pad_get_parent (pad));
+	gboolean ret = FALSE;
+
+	switch (GST_EVENT_TYPE (event)) {
+		case GST_EVENT_CAPS: /* Simply forward caps */
+		{
+			if (data->caps != NULL)
+			{
+				gst_caps_unref(data->caps);
+				data->caps = NULL;
+			}
+
+			GstCaps *caps = NULL;
+			gst_event_parse_caps (event, &caps);
+			data->caps = gst_caps_copy(caps);
+			return TRUE;
+			break;
+		}
+		default:
+			ret = gst_pad_event_default (pad, parent, event);
+			break;
+	}
+
+	return ret;
 }
 
 static GstStateChangeReturn InternalSink_change_state(GstElement *element, GstStateChange transition)
@@ -134,10 +164,12 @@ static void InternalSink_init (InternalSink *data)
 {
 	data->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
 
+	gst_pad_set_event_function (data->sinkpad, InternalSink_event);
 	gst_pad_set_chain_function (data->sinkpad, InternalSink_chain);
 
 	gst_element_add_pad (GST_ELEMENT (data), data->sinkpad);
 
+	data->caps = NULL;
 	data->Writer = NULL;
 }
 

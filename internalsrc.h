@@ -27,19 +27,17 @@ typedef struct _InternalSrcClass InternalSrcClass;
 
 struct _InternalSrc
 {
-	GstElement element;
-	GstPad *srcpad;
+	GstPushSrc element;
 
 	gchar *Name;
 	struct InternalReader *Reader;
-	guint MaxQueue;
+	gint MaxQueue;
 	guint64 Timeout;
-	GstTask *task;
 };
 
 struct _InternalSrcClass 
 {
-	GstElementClass parent_class;
+	GstPushSrcClass parent_class;
 };
 
 GType InternalSrc_get_type (void);

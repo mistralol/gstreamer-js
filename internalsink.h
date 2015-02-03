@@ -29,6 +29,7 @@ struct _InternalSink
 {
 	GstElement element;
 	GstPad *sinkpad;
+	GstCaps *caps;
 
 	gchar *Name;
 	struct InternalWriter *Writer;

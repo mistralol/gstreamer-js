@@ -12,6 +12,13 @@ struct InternalWriter *InternalWriterAttach(const gchar *name, gboolean alloc)
 {
 	struct InternalWriter *Writer = NULL;
 	G_LOCK(WriterLock);
+
+	if (WriterList == NULL && alloc == FALSE)
+	{
+		G_UNLOCK(WriterLock);
+		return NULL;
+	}
+
 	if (WriterList == NULL)
 	{
 		WriterList = g_list_alloc();
@@ -23,9 +30,16 @@ struct InternalWriter *InternalWriterAttach(const gchar *name, gboolean alloc)
 	}
 
 	//Find an Item
-	GList *it = WriterList;
-	while(it && it->data)
+	GList *it = g_list_first(WriterList);
+	while(it)
 	{
+		//GLIB WTF? some of the list has NULL entries.
+		if (it->data == NULL)
+		{
+			it = it->next;
+			continue;
+		}
+
 		struct InternalWriter *tmp = it->data;
 		if (g_strcmp0(name, tmp->Name) == 0)
 		{
@@ -44,7 +58,6 @@ struct InternalWriter *InternalWriterAttach(const gchar *name, gboolean alloc)
 		return NULL;
 	}
 	
-
 	Writer = g_new(struct InternalWriter, 1);
 	if (!Writer)
 	{
@@ -64,16 +77,23 @@ struct InternalWriter *InternalWriterAttach(const gchar *name, gboolean alloc)
 	return Writer; //Sucess!
 }
 
-void InternalWriterWrite(struct InternalWriter *Writer, GstBuffer *buf)
+void InternalWriterWrite(struct InternalWriter *Writer, GstSample *buf)
 {
 	g_mutex_lock(&Writer->lock);
 	GList *it = Writer->Readers;
-	while(it && it->data)
+	while(it)
 	{
-		struct InternalReader *Reader = it->data;
-		if (g_async_queue_length(Reader->Queue) < Reader->MaxQueue)	//Assume overflow FIXME: Deal with this better
+		if (it->data == NULL)
 		{
-			gst_buffer_ref(buf);
+			it = it->next;
+			continue;
+		}
+
+		struct InternalReader *Reader = it->data;
+		gint QLength = g_async_queue_length(Reader->Queue);
+		if (QLength < 0 || QLength < Reader->MaxQueue)
+		{
+			gst_sample_ref(buf);
 			g_async_queue_push(Reader->Queue, buf);
 		}
 		else
@@ -125,7 +145,6 @@ struct InternalReader *InternalReaderAttach(const gchar *Name)
 		return NULL;
 	}
 
-
 	Reader->Writer = Writer;
 	Reader->Queue = g_async_queue_new();
 	Reader->MaxQueue = 15; //FIXME: Get Limits from Element
@@ -139,9 +158,9 @@ struct InternalReader *InternalReaderAttach(const gchar *Name)
 	return Reader;
 }
 
-void InternalReaderRead(struct InternalReader *Reader, GstBuffer **buf)
+void InternalReaderRead(struct InternalReader *Reader, GstSample **buf)
 {
-	*buf = g_async_queue_timeout_pop(Reader->Queue, Reader->Timeout);
+	*buf = g_async_queue_timeout_pop(Reader->Queue, Reader->Timeout * 1000);
 }
 
 void InternalReaderFree(struct InternalReader *Reader)
@@ -152,11 +171,13 @@ void InternalReaderFree(struct InternalReader *Reader)
 	g_mutex_unlock(&Reader->Writer->lock);
 
 	//Pop All and Free Buffers
-	while(g_async_queue_length(Reader->Queue))
+	g_async_queue_lock(Reader->Queue);
+	while(g_async_queue_length_unlocked(Reader->Queue))
 	{
-		GstBuffer *buf = g_async_queue_pop(Reader->Queue);
-		gst_buffer_unref(buf);
+		GstSample *buf = g_async_queue_pop_unlocked(Reader->Queue);
+		gst_sample_unref(buf);
 	}
+	g_async_queue_unlock(Reader->Queue);
 
 	g_async_queue_unref(Reader->Queue);
 	g_free(Reader);
