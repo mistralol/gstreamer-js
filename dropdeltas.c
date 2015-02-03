@@ -109,7 +109,6 @@ static void DropDeltas_init (DropDeltas *this)
 	this->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
 
 	gst_pad_set_event_function (this->sinkpad, DropDeltas_event);
-
 	gst_pad_set_chain_function (this->sinkpad, DropDeltas_chain);
 
 	gst_element_add_pad (GST_ELEMENT (this), this->sinkpad);
