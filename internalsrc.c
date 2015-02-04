@@ -98,14 +98,15 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 		return GST_FLOW_ERROR;
 	}
 
-	GstBuffer *tmp = gst_sample_get_buffer(sample); //unref of gstbuffer is not required
+	GstBuffer *tmp = gst_sample_get_buffer(sample);
 	GstCaps *caps = gst_sample_get_caps(sample);
 	*buf = tmp;
-	gst_buffer_ref(tmp);
+	gst_buffer_ref(*buf); //We need to take a copy of the buffer
 
 	if (caps == NULL)
 	{
 		gst_sample_unref(sample);
+		gst_buffer_unref(tmp);
 		return GST_FLOW_ERROR;
 	}
 
@@ -117,12 +118,14 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 		if (gst_base_src_set_caps(base, caps) == FALSE)
 		{
 			gst_sample_unref(sample);
+			gst_buffer_unref(tmp);
 			return GST_FLOW_ERROR;
 		}
 		GstEvent *event = gst_event_new_caps(caps);
 		if (gst_pad_push_event(GST_BASE_SRC_PAD(base), event) == FALSE)
 		{
 			gst_sample_unref(sample);
+			gst_buffer_unref(tmp);
 			gst_event_unref(event);
 			return GST_FLOW_ERROR;
 		}
@@ -135,14 +138,16 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 			{
 				gst_caps_unref(ccaps);
 				gst_sample_unref(sample);
+				gst_buffer_unref(tmp);
 				return GST_FLOW_ERROR;
 			}
 			GstEvent *event = gst_event_new_caps(caps);
 			if (gst_pad_push_event(GST_BASE_SRC_PAD(base), event) == FALSE)
 			{
-				gst_event_unref(event);
-				gst_caps_unref(ccaps);
 				gst_sample_unref(sample);
+				gst_buffer_unref(tmp);
+				gst_caps_unref(ccaps);
+				gst_event_unref(event);
 				return GST_FLOW_ERROR;
 			}
 			gst_caps_unref(ccaps);
@@ -210,6 +215,7 @@ static void InternalSrc_init (InternalSrc *data)
 	data->MaxQueue = 15;
 	data->Timeout = 5000;
 
+	gst_base_src_set_format(base, GST_FORMAT_TIME);
 	gst_base_src_set_live(base, FALSE);
 }
 
