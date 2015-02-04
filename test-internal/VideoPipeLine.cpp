@@ -193,9 +193,9 @@ void *VideoPipeLine::Run(void *arg)
 		gst_object_unref (self->pipeline);
 		self->pipeline = NULL;
 		printf("VideoPipeLine ShutDown Complete\n");
-		pthread_mutex_unlock(&self->lock);
-		sleep(5);
-		pthread_mutex_lock(&self->lock);
+//		pthread_mutex_unlock(&self->lock);
+//		sleep(5);
+//		pthread_mutex_lock(&self->lock);
 	}
 	pthread_mutex_unlock(&self->lock);
 	return NULL;

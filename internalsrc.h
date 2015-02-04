@@ -27,7 +27,7 @@ typedef struct _InternalSrcClass InternalSrcClass;
 
 struct _InternalSrc
 {
-	GstPushSrc element;
+	GstPushSrc parent;
 
 	gchar *Name;
 	struct InternalReader *Reader;

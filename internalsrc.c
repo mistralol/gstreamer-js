@@ -75,20 +75,6 @@ static void InternalSrc_get_property (GObject *object, guint prop_id, GValue *va
 	}
 }
 
-
-/* initialize the new element
- * instantiate pads and add them to element
- * set pad calback functions
- * initialize instance structure
- */
-static void InternalSrc_init (InternalSrc *data)
-{
-	data->Name = NULL;
-	data->Reader = NULL;
-	data->MaxQueue = 15;
-	data->Timeout = 5000;
-}
-
 /* ask the subclass to create a buffer, the default implementation
  * uses alloc and fill */
 GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
@@ -114,7 +100,8 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 
 	GstBuffer *tmp = gst_sample_get_buffer(sample); //unref of gstbuffer is not required
 	GstCaps *caps = gst_sample_get_caps(sample);
-	*buf = gst_buffer_copy(tmp);
+	*buf = tmp;
+	gst_buffer_ref(tmp);
 
 	if (caps == NULL)
 	{
@@ -126,9 +113,17 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 	GstCaps *ccaps = gst_pad_get_current_caps(GST_BASE_SRC_PAD(base));
 	if (ccaps == NULL)
 	{
+
 		if (gst_base_src_set_caps(base, caps) == FALSE)
 		{
 			gst_sample_unref(sample);
+			return GST_FLOW_ERROR;
+		}
+		GstEvent *event = gst_event_new_caps(caps);
+		if (gst_pad_push_event(GST_BASE_SRC_PAD(base), event) == FALSE)
+		{
+			gst_sample_unref(sample);
+			gst_event_unref(event);
 			return GST_FLOW_ERROR;
 		}
 	}
@@ -142,13 +137,17 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 				gst_sample_unref(sample);
 				return GST_FLOW_ERROR;
 			}
+			GstEvent *event = gst_event_new_caps(caps);
+			if (gst_pad_push_event(GST_BASE_SRC_PAD(base), event) == FALSE)
+			{
+				gst_event_unref(event);
+				gst_caps_unref(ccaps);
+				gst_sample_unref(sample);
+				return GST_FLOW_ERROR;
+			}
 			gst_caps_unref(ccaps);
 		}
 	}
-
-	//TODO: Sort out timestamp blocking issue for zero copy
-	GST_BUFFER_PTS(*buf) = GST_CLOCK_TIME_NONE;
-	GST_BUFFER_DTS(*buf) = GST_CLOCK_TIME_NONE;
 
 	gst_sample_unref(sample);
 	return GST_FLOW_OK;
@@ -196,6 +195,23 @@ static GstStateChangeReturn InternalSrc_change_state(GstElement *element, GstSta
 	return ret;
 }
 
+/* initialize the new element
+ * instantiate pads and add them to element
+ * set pad calback functions
+ * initialize instance structure
+ */
+static void InternalSrc_init (InternalSrc *data)
+{
+	GstPushSrc *src = &data->parent;
+	GstBaseSrc *base = &src->parent;
+
+	data->Name = NULL;
+	data->Reader = NULL;
+	data->MaxQueue = 15;
+	data->Timeout = 5000;
+
+	gst_base_src_set_live(base, FALSE);
+}
 
 static void InternalSrc_Finalize(GObject *object)
 {
@@ -212,10 +228,12 @@ static void InternalSrc_class_init (InternalSrcClass *klass)
 	GObjectClass *gobject_class;
 	GstElementClass *element_class;
 	GstPushSrcClass *pushsrc_class;
+	//GstBaseSrcClass *basesrc_class;
 
 	gobject_class = G_OBJECT_CLASS(klass);
 	element_class = GST_ELEMENT_CLASS(klass);
 	pushsrc_class = GST_PUSH_SRC_CLASS(klass);
+	//basesrc_class = GST_BASE_SRC_CLASS(klass);
 
 	gobject_class->finalize = InternalSrc_Finalize;
 	gobject_class->set_property = InternalSrc_set_property;
