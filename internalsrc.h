@@ -33,6 +33,8 @@ struct _InternalSrc
 	struct InternalReader *Reader;
 	gint MaxQueue;
 	guint64 Timeout;
+
+	GstClockTimeDiff time_offset;
 };
 
 struct _InternalSrcClass 

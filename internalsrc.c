@@ -100,13 +100,13 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 
 	GstBuffer *tmp = gst_sample_get_buffer(sample);
 	GstCaps *caps = gst_sample_get_caps(sample);
-	*buf = tmp;
-	gst_buffer_ref(*buf); //We need to take a copy of the buffer
+	*buf = gst_buffer_copy(tmp);
+	//gst_buffer_ref(*buf); //We need to take a copy of the buffer
 
 	if (caps == NULL)
 	{
 		gst_sample_unref(sample);
-		gst_buffer_unref(tmp);
+		gst_buffer_unref(*buf);
 		return GST_FLOW_ERROR;
 	}
 
@@ -118,14 +118,14 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 		if (gst_base_src_set_caps(base, caps) == FALSE)
 		{
 			gst_sample_unref(sample);
-			gst_buffer_unref(tmp);
+			gst_buffer_unref(*buf);
 			return GST_FLOW_ERROR;
 		}
 		GstEvent *event = gst_event_new_caps(caps);
 		if (gst_pad_push_event(GST_BASE_SRC_PAD(base), event) == FALSE)
 		{
 			gst_sample_unref(sample);
-			gst_buffer_unref(tmp);
+			gst_buffer_unref(*buf);
 			gst_event_unref(event);
 			return GST_FLOW_ERROR;
 		}
@@ -138,14 +138,14 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 			{
 				gst_caps_unref(ccaps);
 				gst_sample_unref(sample);
-				gst_buffer_unref(tmp);
+				gst_buffer_unref(*buf);
 				return GST_FLOW_ERROR;
 			}
 			GstEvent *event = gst_event_new_caps(caps);
 			if (gst_pad_push_event(GST_BASE_SRC_PAD(base), event) == FALSE)
 			{
 				gst_sample_unref(sample);
-				gst_buffer_unref(tmp);
+				gst_buffer_unref(*buf);
 				gst_caps_unref(ccaps);
 				gst_event_unref(event);
 				return GST_FLOW_ERROR;
@@ -153,6 +153,18 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 			gst_caps_unref(ccaps);
 		}
 	}
+
+	if (data->time_offset == 0)
+	{
+		GstClockTime now = gst_clock_get_time(GST_ELEMENT_CLOCK(&base->element));
+		data->time_offset = GST_CLOCK_DIFF(now, GST_BUFFER_DTS(*buf));
+	}
+
+//	g_print("Buffer Times: %" GST_TIME_FORMAT "\n", GST_TIME_ARGS(GST_BUFFER_DTS(*buf)));
+//	g_print("Clock Diff: %ld\n", data->time_offset);
+
+	GST_BUFFER_DTS(*buf) += data->time_offset;
+	GST_BUFFER_PTS(*buf) += data->time_offset;
 
 	gst_sample_unref(sample);
 	return GST_FLOW_OK;
@@ -215,8 +227,11 @@ static void InternalSrc_init (InternalSrc *data)
 	data->MaxQueue = 15;
 	data->Timeout = 5000;
 
+	data->time_offset = 0;
+
+	//gst_base_src_set_do_timestamp(base, TRUE);
 	gst_base_src_set_format(base, GST_FORMAT_TIME);
-	gst_base_src_set_live(base, FALSE);
+	gst_base_src_set_live(base, TRUE);
 }
 
 static void InternalSrc_Finalize(GObject *object)
