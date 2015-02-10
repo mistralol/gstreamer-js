@@ -19,7 +19,9 @@ enum
 {
 	PROP_STREAMNAME = 1,
 	PROP_MAXQUEUESIZE,
-	PROP_TIMEOUT
+	PROP_TIMEOUT,
+	PROP_ALLOW_CAPS_CHANGE,
+	PROP_DROPPED
 };
 
 /* Define src and src pad capabilities. */
@@ -43,11 +45,16 @@ static void InternalSrc_set_property (GObject *object, guint prop_id, const GVal
 			data->Name = g_value_dup_string(value);
 			break;
 		case PROP_MAXQUEUESIZE:
-			data->MaxQueue = g_value_get_int(value);
+			data->Options.MaxQueue = g_value_get_int(value);
 			break;
 		case PROP_TIMEOUT:
-			data->Timeout = g_value_get_uint64(value);
+			data->Options.Timeout = g_value_get_uint64(value);
 			break;
+		case PROP_ALLOW_CAPS_CHANGE:
+			data->AllowCapsChange = g_value_get_boolean(value);
+			break;
+
+		case PROP_DROPPED: //Read Only...
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 			break;
@@ -64,10 +71,23 @@ static void InternalSrc_get_property (GObject *object, guint prop_id, GValue *va
 			g_value_set_string(value, data->Name);
 			break;
 		case PROP_MAXQUEUESIZE:
-			g_value_set_int(value, data->MaxQueue);
+			g_value_set_int(value, data->Options.MaxQueue);
 			break;
 		case PROP_TIMEOUT:
-			g_value_set_uint64(value, data->Timeout);
+			g_value_set_uint64(value, data->Options.Timeout);
+			break;
+		case PROP_ALLOW_CAPS_CHANGE:
+			g_value_set_boolean(value, data->AllowCapsChange);
+			break;
+		case PROP_DROPPED:
+			if (data->Reader)
+			{
+				g_value_set_int(value, data->Reader->Dropped);
+			}
+			else
+			{
+				g_value_set_int(value, 0);
+			}
 			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -84,7 +104,7 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 
 	if (data->Reader == NULL)
 	{
-		data->Reader = InternalReaderAttach(data->Name);
+		data->Reader = InternalReaderAttach(data->Name, &data->Options);
 		if (data->Reader == NULL)
 		{
 			return GST_FLOW_ERROR;
@@ -114,7 +134,7 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 	GstCaps *ccaps = gst_pad_get_current_caps(GST_BASE_SRC_PAD(base));
 	if (ccaps == NULL)
 	{
-
+		//First set of caps
 		if (gst_base_src_set_caps(base, caps) == FALSE)
 		{
 			gst_sample_unref(sample);
@@ -132,6 +152,14 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 	}
 	else
 	{
+		if (data->AllowCapsChange == FALSE)
+		{
+			gst_caps_unref(ccaps);
+			gst_sample_unref(sample);
+			gst_buffer_unref(*buf);
+			return GST_FLOW_ERROR;
+		}
+
 		if (gst_caps_is_equal(ccaps, caps) == FALSE)
 		{
 			if (gst_base_src_set_caps(base, caps) == FALSE)
@@ -224,9 +252,9 @@ static void InternalSrc_init (InternalSrc *data)
 
 	data->Name = NULL;
 	data->Reader = NULL;
-	data->MaxQueue = 15;
-	data->Timeout = 5000;
-
+	data->Options.MaxQueue = 15;
+	data->Options.Timeout = 5000;
+	data->AllowCapsChange = TRUE;
 	data->time_offset = 0;
 
 	//gst_base_src_set_do_timestamp(base, TRUE);
@@ -272,6 +300,12 @@ static void InternalSrc_class_init (InternalSrcClass *klass)
 
 	g_object_class_install_property (gobject_class, PROP_TIMEOUT,
 		g_param_spec_uint64 ("timeout", "timeout", "Timeout for reading in ms", 0, G_MAXUINT64, 5000, G_PARAM_READWRITE));
+
+	g_object_class_install_property (gobject_class, PROP_ALLOW_CAPS_CHANGE,
+		g_param_spec_boolean ("allowcapschange", "allowcaoschange", "Allow element to change caps", TRUE, G_PARAM_READWRITE));
+
+	g_object_class_install_property (gobject_class, PROP_DROPPED,
+		g_param_spec_int ("dropped", "dropped", "Number of frames dropped in the queue", 0, G_MAXINT, 0, G_PARAM_READABLE));
 
 	gst_element_class_set_details_simple(element_class,
 		"InternalSrc",

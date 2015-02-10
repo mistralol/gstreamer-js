@@ -1,6 +1,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <string.h>
 
 #include "internalcommon.h"
 
@@ -91,7 +92,7 @@ void InternalWriterWrite(struct InternalWriter *Writer, GstSample *buf)
 
 		struct InternalReader *Reader = it->data;
 		gint QLength = g_async_queue_length(Reader->Queue);
-		if (QLength < 0 || QLength < Reader->MaxQueue)
+		if (QLength < 0 || QLength < Reader->Options.MaxQueue)
 		{
 			gst_sample_ref(buf);
 			g_async_queue_push(Reader->Queue, buf);
@@ -129,7 +130,7 @@ void InternalWriterFree(struct InternalWriter *Writer)
 	G_UNLOCK(WriterLock);
 }
 
-struct InternalReader *InternalReaderAttach(const gchar *Name)
+struct InternalReader *InternalReaderAttach(const gchar *Name, const struct ReaderOptions *Options)
 {
 	struct InternalWriter *Writer = InternalWriterAttach(Name, FALSE);
 
@@ -147,9 +148,8 @@ struct InternalReader *InternalReaderAttach(const gchar *Name)
 
 	Reader->Writer = Writer;
 	Reader->Queue = g_async_queue_new();
-	Reader->MaxQueue = 15; //FIXME: Get Limits from Element
+	memcpy(&Reader->Options, Options, sizeof(*Options));
 	Reader->Dropped = 0;
-	Reader->Timeout = 5000; //FIXME: Get Timeout from Element
 
 	g_mutex_lock(&Writer->lock);
 	Writer->Readers = g_list_append(Writer->Readers, Reader);
@@ -160,7 +160,7 @@ struct InternalReader *InternalReaderAttach(const gchar *Name)
 
 void InternalReaderRead(struct InternalReader *Reader, GstSample **buf)
 {
-	*buf = g_async_queue_timeout_pop(Reader->Queue, Reader->Timeout * 1000);
+	*buf = g_async_queue_timeout_pop(Reader->Queue, Reader->Options.Timeout * 1000);
 }
 
 void InternalReaderFree(struct InternalReader *Reader)

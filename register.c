@@ -3,6 +3,7 @@
 #include <gst/base/gstpushsrc.h>
 
 #include "pipestats.h"
+#include "internalcommon.h"
 #include "internalsink.h"
 #include "internalsrc.h"
 #include "dropdeltas.h"

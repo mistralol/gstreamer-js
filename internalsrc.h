@@ -31,10 +31,9 @@ struct _InternalSrc
 
 	gchar *Name;
 	struct InternalReader *Reader;
-	gint MaxQueue;
-	guint64 Timeout;
-
+	struct ReaderOptions Options;
 	GstClockTimeDiff time_offset;
+	gboolean AllowCapsChange;
 };
 
 struct _InternalSrcClass 
