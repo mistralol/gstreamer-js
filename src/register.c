@@ -42,14 +42,17 @@ static gboolean Register_init (GstPlugin *data)
 	return TRUE;
 }
 
-#define PACKAGE "Custom"
+#ifndef PACKAGE
+#define PACKAGE "gstreamer-js"
+#endif
+
 GST_PLUGIN_DEFINE (
 	GST_VERSION_MAJOR,
 	GST_VERSION_MINOR,
-	Custom,
+	gstreamer-js,
 	"Provide some extra gstreamer elements",
 	Register_init,
-	"0.1",
+	"1.0",
 	"LGPL",
 	"Stev",
 	"http://www.stev.org/"
