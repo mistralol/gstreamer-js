@@ -15,7 +15,6 @@ libgstreamerjs_la_SOURCES=bufferjitter.c \
 libgstreamerjs_la_CFLAGS = $(GST_CFLAGS)
 libgstreamerjs_la_LIBADD = $(GST_LIBS)
 libgstreamerjs_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
-libgstreamerjs_la_LDFLAGS=$(GST_PLUGIN_LDFLAGS)
 libgstreamerjs_la_LIBTOOLSFLAGS=--tag=disable-static
 
 
