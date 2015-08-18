@@ -10,6 +10,7 @@ libgstreamerjs_la_SOURCES=bufferjitter.c \
 		internalsink.c \
 		internalsrc.c \
 		pipestats.c \
+		dumpcaps.c \
 		register.c
 
 libgstreamerjs_la_CFLAGS = $(GST_CFLAGS)

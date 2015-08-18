@@ -11,6 +11,7 @@
 #include "clockdrift.h"
 #include "bufferjitter.h"
 #include "bufferspike.h"
+#include "dumpcaps.h"
 
 
 static gboolean Register_init (GstPlugin *data)
@@ -37,6 +38,9 @@ static gboolean Register_init (GstPlugin *data)
 		return FALSE;
 
 	if (InitBufferSpike(data) == FALSE)
+		return FALSE;
+		
+	if (InitDumpCaps(data) == FALSE)
 		return FALSE;
 
 	return TRUE;
