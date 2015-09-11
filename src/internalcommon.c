@@ -125,8 +125,10 @@ void InternalWriterFree(struct InternalWriter *Writer)
 			g_list_free(WriterList);
 			WriterList = NULL;
 		}
+		G_UNLOCK(WriterLock);
+		return;
 	}
-	
+	g_mutex_unlock(&Writer->lock);
 	G_UNLOCK(WriterLock);
 }
 
