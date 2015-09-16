@@ -328,6 +328,7 @@ static gboolean PipeStats_event (GstPad *pad, GstObject *parent, GstEvent  *even
 	PipeStats* stats = GST_PIPESTATS(gst_pad_get_parent (pad));
 	gboolean ret = FALSE;
 
+	g_print("Got Event!\n");
 	switch (GST_EVENT_TYPE (event)) {
 		case GST_EVENT_CAPS: /* Simply forward caps */
 		{
@@ -340,7 +341,7 @@ static gboolean PipeStats_event (GstPad *pad, GstObject *parent, GstEvent  *even
 			break;
 		}
 		default:
-			ret = gst_pad_event_default (pad, parent, event);
+			ret = gst_pad_event_default(pad, parent, event);
 			break;
 	}
 
@@ -357,8 +358,10 @@ static void PipeStats_init (PipeStats *stats)
 	stats->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
 	stats->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
 
-	gst_pad_set_event_function (stats->sinkpad, PipeStats_event);
+	GST_PAD_SET_PROXY_CAPS(stats->sinkpad);
+	GST_PAD_SET_PROXY_CAPS(stats->srcpad);
 
+	gst_pad_set_event_function (stats->sinkpad, PipeStats_event);
 	gst_pad_set_chain_function (stats->sinkpad, PipeStats_chain);
 
 	gst_element_add_pad (GST_ELEMENT (stats), stats->sinkpad);

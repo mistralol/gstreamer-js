@@ -217,8 +217,10 @@ static void BufferJitter_init (BufferJitter *this)
 	this->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
 	this->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
 
-	gst_pad_set_event_function (this->sinkpad, BufferJitter_event);
+	GST_PAD_SET_PROXY_CAPS(this->sinkpad);
+	GST_PAD_SET_PROXY_CAPS(this->srcpad);
 
+	gst_pad_set_event_function (this->sinkpad, BufferJitter_event);
 	gst_pad_set_chain_function (this->sinkpad, BufferJitter_chain);
 
 	gst_element_add_pad (GST_ELEMENT (this), this->sinkpad);

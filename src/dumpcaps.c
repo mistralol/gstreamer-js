@@ -140,6 +140,9 @@ static void DumpCaps_init (DumpCaps *this)
 	this->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
 	this->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
 
+	GST_PAD_SET_PROXY_CAPS(this->sinkpad);
+	GST_PAD_SET_PROXY_CAPS(this->srcpad);
+
 	gst_pad_set_event_function (this->sinkpad, DumpCaps_event);
 	gst_pad_set_chain_function (this->sinkpad, DumpCaps_chain);
 

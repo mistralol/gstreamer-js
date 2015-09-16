@@ -163,6 +163,8 @@ static GstStateChangeReturn InternalSink_change_state(GstElement *element, GstSt
 static void InternalSink_init (InternalSink *data)
 {
 	data->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
+	
+	GST_PAD_SET_PROXY_CAPS(data->sinkpad);
 
 	gst_pad_set_event_function (data->sinkpad, InternalSink_event);
 	gst_pad_set_chain_function (data->sinkpad, InternalSink_chain);
