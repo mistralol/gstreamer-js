@@ -328,7 +328,6 @@ static gboolean PipeStats_event (GstPad *pad, GstObject *parent, GstEvent  *even
 	PipeStats* stats = GST_PIPESTATS(gst_pad_get_parent (pad));
 	gboolean ret = FALSE;
 
-	g_print("Got Event!\n");
 	switch (GST_EVENT_TYPE (event)) {
 		case GST_EVENT_CAPS: /* Simply forward caps */
 		{
