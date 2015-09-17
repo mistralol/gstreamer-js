@@ -27,7 +27,7 @@ typedef struct _InternalSrcClass InternalSrcClass;
 
 struct _InternalSrc
 {
-	GstPushSrc parent;
+	GstBaseSrc parent;
 
 	gchar *Name;
 	struct InternalReader *Reader;
@@ -38,7 +38,7 @@ struct _InternalSrc
 
 struct _InternalSrcClass 
 {
-	GstPushSrcClass parent_class;
+	GstBaseSrcClass parent_class;
 };
 
 GType InternalSrc_get_type (void);

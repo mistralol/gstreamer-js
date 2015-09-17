@@ -33,7 +33,7 @@ static GstStaticPadTemplate src = GST_STATIC_PAD_TEMPLATE(
 );
 
 #define InternalSrc_parent_class parent_class
-G_DEFINE_TYPE (InternalSrc, InternalSrc, GST_TYPE_PUSH_SRC);
+G_DEFINE_TYPE (InternalSrc, InternalSrc, GST_TYPE_BASE_SRC);
 
 static void InternalSrc_set_property (GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
@@ -97,10 +97,9 @@ static void InternalSrc_get_property (GObject *object, guint prop_id, GValue *va
 
 /* ask the subclass to create a buffer, the default implementation
  * uses alloc and fill */
-GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
+GstFlowReturn InternalSrcCreate(GstBaseSrc *base, guint64 offset, guint size, GstBuffer **buf)
 {
-	InternalSrc *data = GST_INTERNALSRC(src);
-	GstBaseSrc *base = &src->parent;
+	InternalSrc *data = GST_INTERNALSRC(base);
 
 	if (data->Reader == NULL)
 	{
@@ -120,8 +119,8 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 
 	GstBuffer *tmp = gst_sample_get_buffer(sample);
 	GstCaps *caps = gst_sample_get_caps(sample);
-	*buf = gst_buffer_copy(tmp);
-	//gst_buffer_ref(*buf); //We need to take a copy of the buffer
+	*buf = gst_buffer_copy(tmp); //We need to take a copy of the buffer
+	//gst_buffer_ref(*buf); 
 
 	if (caps == NULL)
 	{
@@ -131,113 +130,109 @@ GstFlowReturn InternalSrcCreate(GstPushSrc *src, GstBuffer **buf)
 	}
 
 	//Compare and send new caps if required
-	GstCaps *ccaps = gst_pad_get_current_caps(GST_BASE_SRC_PAD(base));
-	if (ccaps == NULL)
+	GstCaps *oldcaps = gst_pad_get_current_caps(GST_BASE_SRC_PAD(base));
+	if (oldcaps == NULL)
 	{
-		//First set of caps
+		//No caps then we set them
 		if (gst_base_src_set_caps(base, caps) == FALSE)
 		{
 			gst_sample_unref(sample);
 			gst_buffer_unref(*buf);
 			return GST_FLOW_ERROR;
 		}
-		GstEvent *event = gst_event_new_caps(caps);
-		if (gst_pad_push_event(GST_BASE_SRC_PAD(base), event) == FALSE)
-		{
-			gst_sample_unref(sample);
-			gst_buffer_unref(*buf);
-			gst_event_unref(event);
-			return GST_FLOW_ERROR;
-		}
 	}
 	else
 	{
-		if (data->AllowCapsChange == FALSE)
+		//Find out if caps have changed
+		if (gst_caps_is_equal(oldcaps, caps) == FALSE)
 		{
-			gst_caps_unref(ccaps);
-			gst_sample_unref(sample);
-			gst_buffer_unref(*buf);
-			return GST_FLOW_ERROR;
-		}
+			if (data->AllowCapsChange == FALSE)
+			{
+				gst_caps_unref(oldcaps);
+				gst_sample_unref(sample);
+				gst_buffer_unref(*buf);
+				return GST_FLOW_ERROR;
+			}
 
-		if (gst_caps_is_equal(ccaps, caps) == FALSE)
-		{
 			if (gst_base_src_set_caps(base, caps) == FALSE)
 			{
-				gst_caps_unref(ccaps);
+				gst_caps_unref(oldcaps);
 				gst_sample_unref(sample);
 				gst_buffer_unref(*buf);
 				return GST_FLOW_ERROR;
 			}
-			GstEvent *event = gst_event_new_caps(caps);
-			if (gst_pad_push_event(GST_BASE_SRC_PAD(base), event) == FALSE)
-			{
-				gst_sample_unref(sample);
-				gst_buffer_unref(*buf);
-				gst_caps_unref(ccaps);
-				gst_event_unref(event);
-				return GST_FLOW_ERROR;
-			}
-			gst_caps_unref(ccaps);
+			
+			gst_caps_unref(oldcaps);
 		}
 	}
+
 
 	if (data->time_offset == 0)
 	{
+		g_print("Clock Read\n");
 		GstClockTime now = gst_clock_get_time(GST_ELEMENT_CLOCK(&base->element));
+		g_print("Clock OK\n");
 		data->time_offset = GST_CLOCK_DIFF(now, GST_BUFFER_DTS(*buf));
 	}
 
-//	g_print("Buffer Times: %" GST_TIME_FORMAT "\n", GST_TIME_ARGS(GST_BUFFER_DTS(*buf)));
-//	g_print("Clock Diff: %ld\n", data->time_offset);
+	g_print("Buffer Times: %" GST_TIME_FORMAT "\n", GST_TIME_ARGS(GST_BUFFER_DTS(*buf)));
+	g_print("Clock Diff: %ld\n", data->time_offset);
 
 	GST_BUFFER_DTS(*buf) += data->time_offset;
 	GST_BUFFER_PTS(*buf) += data->time_offset;
-
+	
+	g_print("Pushing buffer\n");
 	gst_sample_unref(sample);
 	return GST_FLOW_OK;
 }
 
-static GstStateChangeReturn InternalSrc_change_state(GstElement *element, GstStateChange transition)
+
+static gboolean InternalSrcStart(GstBaseSrc *basesrc)
 {
-	GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
-	InternalSrc *data = GST_INTERNALSRC(element);
-
-	if (GST_IS_INTERNALSRC(element) == FALSE)
-		return GST_FLOW_ERROR;
-
+	InternalSrc *data = GST_INTERNALSRC(basesrc);
+	
 	if (data->Name == NULL || g_strcmp0(data->Name, "") == 0)
 	{
 		GST_ERROR("streamname property is not set");
-		return GST_FLOW_ERROR;
+		return FALSE;
 	}
+	
+	gst_base_src_set_live(basesrc, TRUE);
+	gst_base_src_set_format(basesrc, GST_FORMAT_TIME);
+	
+	g_print("Started\n");
+	
+	return TRUE;
+}
 
-	switch(transition)
-	{
-		case GST_STATE_CHANGE_NULL_TO_READY:
-			break;
-		default:
-			break;
-	}
+static gboolean InternalSrcStop(GstBaseSrc *basesrc)
+{
+	InternalSrc *data = GST_INTERNALSRC(basesrc);
+	
+	InternalReaderFree(data->Reader);
+	data->Reader = NULL;
+	
+	g_print("Stopped\n");
+	return TRUE;
+}
 
-	ret = GST_ELEMENT_CLASS(parent_class)->change_state (element, transition);
-	if (ret == GST_STATE_CHANGE_FAILURE)
-		return ret;
+static gboolean InternalSrcIsSeekable(GstBaseSrc *basesrc)
+{
+	g_print("IsSeekable\n");
+	return FALSE;
+}
 
-	switch(transition)
-	{
-		case GST_STATE_CHANGE_READY_TO_NULL:
-			if (data->Reader != NULL)
-			{
-				InternalReaderFree(data->Reader);
-				data->Reader = NULL;
-			}
-			break;
-		default:
-			break;
-	}
+static gboolean InternalSrcEvent(GstBaseSrc *basesrc, GstEvent *event)
+{
+	g_print("Event\n");
+	return GST_BASE_SRC_CLASS(parent_class)->event(basesrc, event);
+}
 
-	return ret;
+static void InternalSrcGetTimes(GstBaseSrc *basesrc, GstBuffer *buffer, GstClockTime *start, GstClockTime *end)
+{
+	g_print("GetTimes\n");
+	*start = -1;
+	*end = -1;
 }
 
 /* initialize the new element
@@ -247,8 +242,7 @@ static GstStateChangeReturn InternalSrc_change_state(GstElement *element, GstSta
  */
 static void InternalSrc_init (InternalSrc *data)
 {
-	GstPushSrc *src = &data->parent;
-	GstBaseSrc *base = &src->parent;
+//	GstBaseSrc *base = &data->parent;
 
 	data->Name = NULL;
 	data->Reader = NULL;
@@ -256,10 +250,6 @@ static void InternalSrc_init (InternalSrc *data)
 	data->Options.Timeout = 5000;
 	data->AllowCapsChange = TRUE;
 	data->time_offset = 0;
-
-	//gst_base_src_set_do_timestamp(base, TRUE);
-	gst_base_src_set_format(base, GST_FORMAT_TIME);
-	gst_base_src_set_live(base, TRUE);
 }
 
 static void InternalSrc_Finalize(GObject *object)
@@ -267,30 +257,31 @@ static void InternalSrc_Finalize(GObject *object)
 	InternalSrc *data = GST_INTERNALSRC(object);
 
 	if (data->Name)
-	{
 		g_free(data->Name);
-	}
+
 }
 
 static void InternalSrc_class_init (InternalSrcClass *klass)
 {
 	GObjectClass *gobject_class;
 	GstElementClass *element_class;
-	GstPushSrcClass *pushsrc_class;
-	//GstBaseSrcClass *basesrc_class;
+	GstBaseSrcClass *basesrc_class;
 
 	gobject_class = G_OBJECT_CLASS(klass);
 	element_class = GST_ELEMENT_CLASS(klass);
-	pushsrc_class = GST_PUSH_SRC_CLASS(klass);
-	//basesrc_class = GST_BASE_SRC_CLASS(klass);
+	basesrc_class = GST_BASE_SRC_CLASS(klass);
 
 	gobject_class->finalize = InternalSrc_Finalize;
 	gobject_class->set_property = InternalSrc_set_property;
 	gobject_class->get_property = InternalSrc_get_property;
 
-	element_class->change_state = InternalSrc_change_state;
+	basesrc_class->create = InternalSrcCreate;
+	basesrc_class->start = InternalSrcStart;
+	basesrc_class->stop = InternalSrcStop;
+	basesrc_class->is_seekable = InternalSrcIsSeekable;
+	basesrc_class->event = InternalSrcEvent;
+	basesrc_class->get_times = InternalSrcGetTimes;
 
-	pushsrc_class->create = InternalSrcCreate;
 
 	g_object_class_install_property (gobject_class, PROP_STREAMNAME,
 		g_param_spec_string ("streamname", "streamname", "The stream name for the source element to connect to", "", G_PARAM_READWRITE));
