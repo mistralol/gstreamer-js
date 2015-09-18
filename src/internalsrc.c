@@ -169,19 +169,16 @@ GstFlowReturn InternalSrcCreate(GstBaseSrc *base, guint64 offset, guint size, Gs
 
 	if (data->time_offset == 0)
 	{
-		g_print("Clock Read\n");
 		GstClockTime now = gst_clock_get_time(GST_ELEMENT_CLOCK(&base->element));
-		g_print("Clock OK\n");
 		data->time_offset = GST_CLOCK_DIFF(now, GST_BUFFER_DTS(*buf));
 	}
 
-	g_print("Buffer Times: %" GST_TIME_FORMAT "\n", GST_TIME_ARGS(GST_BUFFER_DTS(*buf)));
-	g_print("Clock Diff: %ld\n", data->time_offset);
+//	g_print("Buffer Times: %" GST_TIME_FORMAT "\n", GST_TIME_ARGS(GST_BUFFER_DTS(*buf)));
+//	g_print("Clock Diff: %ld\n", data->time_offset);
 
 	GST_BUFFER_DTS(*buf) += data->time_offset;
 	GST_BUFFER_PTS(*buf) += data->time_offset;
 	
-	g_print("Pushing buffer\n");
 	gst_sample_unref(sample);
 	return GST_FLOW_OK;
 }
@@ -200,8 +197,6 @@ static gboolean InternalSrcStart(GstBaseSrc *basesrc)
 	gst_base_src_set_live(basesrc, TRUE);
 	gst_base_src_set_format(basesrc, GST_FORMAT_TIME);
 	
-	g_print("Started\n");
-	
 	return TRUE;
 }
 
@@ -209,28 +204,17 @@ static gboolean InternalSrcStop(GstBaseSrc *basesrc)
 {
 	InternalSrc *data = GST_INTERNALSRC(basesrc);
 	
-	InternalReaderFree(data->Reader);
-	data->Reader = NULL;
+	if (data->Reader)
+	{
+		InternalReaderFree(data->Reader);
+		data->Reader = NULL;
+	}
 	
-	g_print("Stopped\n");
 	return TRUE;
-}
-
-static gboolean InternalSrcIsSeekable(GstBaseSrc *basesrc)
-{
-	g_print("IsSeekable\n");
-	return FALSE;
-}
-
-static gboolean InternalSrcEvent(GstBaseSrc *basesrc, GstEvent *event)
-{
-	g_print("Event\n");
-	return GST_BASE_SRC_CLASS(parent_class)->event(basesrc, event);
 }
 
 static void InternalSrcGetTimes(GstBaseSrc *basesrc, GstBuffer *buffer, GstClockTime *start, GstClockTime *end)
 {
-	g_print("GetTimes\n");
 	*start = -1;
 	*end = -1;
 }
@@ -278,8 +262,6 @@ static void InternalSrc_class_init (InternalSrcClass *klass)
 	basesrc_class->create = InternalSrcCreate;
 	basesrc_class->start = InternalSrcStart;
 	basesrc_class->stop = InternalSrcStop;
-	basesrc_class->is_seekable = InternalSrcIsSeekable;
-	basesrc_class->event = InternalSrcEvent;
 	basesrc_class->get_times = InternalSrcGetTimes;
 
 
