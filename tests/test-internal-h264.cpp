@@ -19,7 +19,7 @@ int main(int argc, char **argv)
 	printf("Init\n");
 	VideoPipeLine *VSource = new VideoPipeLine("videotestsrc is-live=true ! video/x-raw,format=I420, width=(int)640, height=(int)480, framerate=(fraction)5/1 ! x264enc key-int-max=30 byte-stream=true ! internalsink streamname=vs1");
 	VideoPipeLine *VDest1 = new VideoPipeLine("internalsrc streamname=vs1 ! avdec_h264 ! appsink name=appsink0 emit-signals=true");
-	VideoPipeLine *VDest2 = new VideoPipeLine("internalsrc streamname=vs1 ! avdec_h264 ! videoconvert ! videoscale ! ximagesink");
+	VideoPipeLine *VDest2 = new VideoPipeLine("internalsrc streamname=vs1 ! avdec_h264 ! fakesink silent=false");
 
 	//VideoPipeLine *VDest = new VideoPipeLine("internalsrc streamname=vs1 ! appsink name=appsink0 emit-signals=true");
 

@@ -1,7 +1,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
-#include <gst/base/gstpushsrc.h>
+#include <gst/base/gstbasesrc.h>
 
 #include "internalcommon.h"
 #include "internalsrc.h"
@@ -103,23 +103,35 @@ GstFlowReturn InternalSrcCreate(GstBaseSrc *base, guint64 offset, guint size, Gs
 
 	if (data->Reader == NULL)
 	{
+		GST_DEBUG("Attempting to connect to: %s", data->Name);
 		data->Reader = InternalReaderAttach(data->Name, &data->Options);
 		if (data->Reader == NULL)
 		{
+			GST_ERROR("Failed to connect to stream '%s'", data->Name);
 			return GST_FLOW_ERROR;
 		}
+		GST_DEBUG("Connected to: %s", data->Name);
 	}
 
 	GstSample *sample = NULL;
+	GST_DEBUG("Reading buffer from %s", data->Name);
 	InternalReaderRead(data->Reader, &sample);
 	if (sample == NULL)
 	{
+		GST_ERROR("Failed to read buffer from streamname '%s'", data->Name);
 		return GST_FLOW_ERROR;
 	}
+	GST_DEBUG("Read buffer from %s", data->Name);
 
 	GstBuffer *tmp = gst_sample_get_buffer(sample);
 	GstCaps *caps = gst_sample_get_caps(sample);
 	*buf = gst_buffer_copy(tmp); //We need to take a copy of the buffer
+	if (!buf)
+	{
+		gst_sample_unref(sample);
+		GST_ERROR("Failed to make buffer writeable");
+		return GST_FLOW_ERROR;
+	}
 	//gst_buffer_ref(*buf); 
 
 	if (caps == NULL)
@@ -166,26 +178,27 @@ GstFlowReturn InternalSrcCreate(GstBaseSrc *base, guint64 offset, guint size, Gs
 		}
 	}
 
-
-	if (data->time_offset == 0)
+	//Put timestampts to the time of the first buffer we saw
+	if (data->first_dts == 0  && GST_BUFFER_DTS(*buf) != GST_CLOCK_TIME_NONE)
 	{
-		GstClockTime now = gst_clock_get_time(GST_ELEMENT_CLOCK(&base->element));
-		data->time_offset = GST_CLOCK_DIFF(now, GST_BUFFER_DTS(*buf));
+		data->first_dts = GST_BUFFER_DTS(*buf);
 	}
-
-//	g_print("Buffer Times: %" GST_TIME_FORMAT "\n", GST_TIME_ARGS(GST_BUFFER_DTS(*buf)));
-//	g_print("Clock Diff: %ld\n", data->time_offset);
-
-	GST_BUFFER_DTS(*buf) += data->time_offset;
-	GST_BUFFER_PTS(*buf) += data->time_offset;
+	GST_BUFFER_DTS(*buf) -= data->first_dts;
+	
+	//Put timestampts to the time of the first buffer we saw
+	if (data->first_pts == 0  && GST_BUFFER_PTS(*buf) != GST_CLOCK_TIME_NONE)
+	{
+		data->first_pts = GST_BUFFER_PTS(*buf);
+	}
+	GST_BUFFER_PTS(*buf) -= data->first_pts;
 	
 	gst_sample_unref(sample);
 	return GST_FLOW_OK;
 }
 
-
 static gboolean InternalSrcStart(GstBaseSrc *basesrc)
 {
+	GST_INFO("InternalSrcStart");
 	InternalSrc *data = GST_INTERNALSRC(basesrc);
 	
 	if (data->Name == NULL || g_strcmp0(data->Name, "") == 0)
@@ -194,14 +207,12 @@ static gboolean InternalSrcStart(GstBaseSrc *basesrc)
 		return FALSE;
 	}
 	
-	gst_base_src_set_live(basesrc, TRUE);
-	gst_base_src_set_format(basesrc, GST_FORMAT_TIME);
-	
 	return TRUE;
 }
 
 static gboolean InternalSrcStop(GstBaseSrc *basesrc)
 {
+	GST_DEBUG("InternalSrcStop");
 	InternalSrc *data = GST_INTERNALSRC(basesrc);
 	
 	if (data->Reader)
@@ -213,8 +224,27 @@ static gboolean InternalSrcStop(GstBaseSrc *basesrc)
 	return TRUE;
 }
 
+static gboolean InternalSrcQuery(GstBaseSrc *src, GstQuery *query)
+{
+	GST_DEBUG("InternalSrcQuery");
+	gboolean ret = FALSE;
+	switch (GST_QUERY_TYPE (query)) {
+		case GST_QUERY_SCHEDULING:
+			GST_INFO("Set scheduling mode");
+			gst_query_set_scheduling (query, GST_SCHEDULING_FLAG_SEQUENTIAL, 1, -1, 0);
+			gst_query_add_scheduling_mode (query, GST_PAD_MODE_PUSH);
+			ret = TRUE;
+			break;
+		default:
+			ret =  GST_BASE_SRC_CLASS (parent_class)->query (src, query);
+			break;
+	}
+	return ret;
+}
+
 static void InternalSrcGetTimes(GstBaseSrc *basesrc, GstBuffer *buffer, GstClockTime *start, GstClockTime *end)
 {
+	GST_DEBUG("InternalSrcGetTimes");
 	*start = -1;
 	*end = -1;
 }
@@ -226,14 +256,18 @@ static void InternalSrcGetTimes(GstBaseSrc *basesrc, GstBuffer *buffer, GstClock
  */
 static void InternalSrc_init (InternalSrc *data)
 {
-//	GstBaseSrc *base = &data->parent;
+	GstBaseSrc *basesrc = &data->parent;
 
 	data->Name = NULL;
 	data->Reader = NULL;
 	data->Options.MaxQueue = 15;
 	data->Options.Timeout = 5000;
 	data->AllowCapsChange = TRUE;
-	data->time_offset = 0;
+	data->first_dts = 0;
+	data->first_pts = 0;
+	
+	gst_base_src_set_live(basesrc, TRUE);
+	gst_base_src_set_format(basesrc, GST_FORMAT_TIME);
 }
 
 static void InternalSrc_Finalize(GObject *object)
@@ -262,6 +296,7 @@ static void InternalSrc_class_init (InternalSrcClass *klass)
 	basesrc_class->create = InternalSrcCreate;
 	basesrc_class->start = InternalSrcStart;
 	basesrc_class->stop = InternalSrcStop;
+	basesrc_class->query = InternalSrcQuery;
 	basesrc_class->get_times = InternalSrcGetTimes;
 
 

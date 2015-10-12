@@ -32,7 +32,8 @@ struct _InternalSrc
 	gchar *Name;
 	struct InternalReader *Reader;
 	struct ReaderOptions Options;
-	GstClockTimeDiff time_offset;
+	GstClockTime first_dts;
+	GstClockTime first_pts;
 	gboolean AllowCapsChange;
 };
 

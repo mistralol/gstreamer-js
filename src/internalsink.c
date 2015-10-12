@@ -72,6 +72,7 @@ static GstFlowReturn InternalSink_chain (GstPad *pad, GstObject *parent, GstBuff
 	}
 
 	GstSample *sample = gst_sample_new(buf, data->caps, NULL, NULL);
+	GST_DEBUG("Incoming Buffer StreamName: %s", data->Name);
 	InternalWriterWrite(data->Writer, sample);
 	gst_sample_unref(sample);
 

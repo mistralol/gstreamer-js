@@ -169,6 +169,8 @@ void *VideoPipeLine::Run(void *arg)
 		}
 
 		bus = gst_element_get_bus (self->pipeline);
+		
+		g_signal_connect(self->pipeline, "deep-notify", G_CALLBACK (gst_object_default_deep_notify), NULL);
 
 		printf("VideoPipeLine Start Playing\n");
 		if (self->SetState(GST_STATE_PLAYING) == true)
