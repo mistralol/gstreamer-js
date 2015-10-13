@@ -36,7 +36,7 @@ struct _ClockDrift
 	gint last_drift;
 	gint max_drift;
 	gint min_drift;
-
+	gint ignore;
 	gint error_drift;
 
 	gboolean silent;

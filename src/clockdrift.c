@@ -22,7 +22,8 @@ enum
 	PROP_DRIFT,
 	PROP_MAX_DRIFT,
 	PROP_MIN_DRIFT,
-	PROP_ERROR_DRIFT
+	PROP_ERROR_DRIFT,
+	PROP_IGNORE
 };
 
 #define clockdrift_parent_class parent_class
@@ -54,6 +55,9 @@ static void ClockDrift_set_property (GObject *object, guint prop_id, const GValu
 		case PROP_ERROR_DRIFT:
 			this->error_drift = g_value_get_int(value);
 			break;
+		case PROP_IGNORE:
+			this->ignore = g_value_get_uint(value);
+			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 			break;
@@ -80,6 +84,9 @@ static void ClockDrift_get_property (GObject *object, guint prop_id, GValue *val
 		case PROP_ERROR_DRIFT:
 			g_value_set_int(value, this->error_drift);
 			break;
+		case PROP_IGNORE:
+			g_value_set_int(value, this->ignore);
+			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 			break;
@@ -96,6 +103,14 @@ static GstFlowReturn ClockDrift_chain (GstPad *pad, GstObject *parent, GstBuffer
 
 	if (GST_BUFFER_TIMESTAMP(buf) == GST_CLOCK_TIME_NONE)
 		return gst_pad_push (this->srcpad, buf);
+
+	if (this->ignore > 0)
+	{
+		GST_DEBUG("Ignoreing buffer %d left to ignore", this->ignore);
+		this->ignore--;
+		return gst_pad_push (this->srcpad, buf);
+	}
+
 
 	if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
 	{
@@ -201,6 +216,7 @@ static void ClockDrift_init (ClockDrift *this)
 	this->max_drift = 0;
 	this->error_drift = G_MAXINT;
 	this->silent = TRUE;
+	this->ignore = 0;
 }
 
 
@@ -229,6 +245,10 @@ static void ClockDrift_class_init (ClockDriftClass *klass)
 
 	g_object_class_install_property (gobject_class, PROP_ERROR_DRIFT,
 		g_param_spec_int ("error_drift", "error_drift", "Fail if the drift is more than this value in ms", G_MAXINT, G_MAXINT, G_MAXINT, G_PARAM_READABLE));
+
+	g_object_class_install_property (gobject_class, PROP_IGNORE,
+		g_param_spec_int ("ignore", "ignore", "ignre the first n buffers", 0, G_MAXINT, 0, G_PARAM_READABLE));
+
 
 	gst_element_class_set_details_simple(gstelement_class,
 		"ClockDrift",
