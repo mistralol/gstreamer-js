@@ -109,6 +109,7 @@ static gboolean DumpCaps_event (GstPad *pad, GstObject *parent, GstEvent  *event
 				g_print("NEW CAPS: %s\n", str);
 			GST_INFO("NEW CAPS: %s", str);
 			g_free(str);
+			gst_event_unref(event);
 			break;
 		}
 		default:

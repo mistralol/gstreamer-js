@@ -97,6 +97,7 @@ static gboolean InternalSink_event (GstPad *pad, GstObject *parent, GstEvent  *e
 			GstCaps *caps = NULL;
 			gst_event_parse_caps (event, &caps);
 			data->caps = gst_caps_copy(caps);
+			gst_event_unref(event);
 			return TRUE;
 			break;
 		}

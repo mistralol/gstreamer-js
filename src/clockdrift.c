@@ -179,6 +179,7 @@ static gboolean ClockDrift_event (GstPad *pad, GstObject *parent, GstEvent  *eve
 			GstCaps *ncaps = gst_caps_copy(caps);
 			ret = gst_pad_set_caps(this->srcpad, ncaps);
 			gst_caps_unref(ncaps);
+			gst_event_unref(event);
 			break;
 		}
 		default:
