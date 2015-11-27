@@ -12,6 +12,7 @@
 #include "bufferjitter.h"
 #include "bufferspike.h"
 #include "dumpcaps.h"
+#include "jsmotion.h"
 
 
 static gboolean Register_init (GstPlugin *data)
@@ -41,6 +42,9 @@ static gboolean Register_init (GstPlugin *data)
 		return FALSE;
 		
 	if (InitDumpCaps(data) == FALSE)
+		return FALSE;
+		
+	if (InitJSMotion(data) == FALSE)
 		return FALSE;
 
 	return TRUE;
