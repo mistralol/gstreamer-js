@@ -20,6 +20,7 @@ enum
 enum
 {
 	PROP_SILENT = 1,
+	PROP_BUS,
 	PROP_PERIOD,
 
 	/* Accesses For Data */
@@ -112,6 +113,9 @@ static void PipeStats_set_property (GObject *object, guint prop_id, const GValue
 		case PROP_SILENT:
 			stats->silent = g_value_get_boolean (value);
 			break;
+		case PROP_BUS:
+			stats->bus = g_value_get_boolean (value);
+			break;
 		case PROP_PERIOD:
 			stats->period = g_value_get_int(value);
 			break;
@@ -148,6 +152,9 @@ static void PipeStats_get_property (GObject *object, guint prop_id, GValue *valu
 	switch (prop_id) {
 		case PROP_SILENT:
 			g_value_set_boolean (value, stats->silent);
+			break;
+		case PROP_BUS:
+			g_value_set_boolean (value, stats->bus);
 			break;
 		case PROP_PERIOD:
 			g_value_set_int(value, stats->period);
@@ -319,6 +326,38 @@ static GstFlowReturn PipeStats_chain (GstPad *pad, GstObject *parent, GstBuffer 
 					(((double) (stats->last_frame_size) / stats->period) / 1024) * 8
 			);
 		}
+		
+		if (stats->bus == TRUE)
+		{
+			GstStructure *data = gst_structure_new("pipestats",
+				"FrameRate", G_TYPE_DOUBLE, (double) (stats->last_frame_count) / stats->period,
+				"BitRate", G_TYPE_DOUBLE, (((double) (stats->last_frame_size) / stats->period) / 1024) * 8,
+				"TotalFrames", G_TYPE_UINT64, stats->total_frames,
+				"TotalIFrames", G_TYPE_UINT64, stats->total_iframes,
+				"TotalDFrames", G_TYPE_UINT64, stats->total_dframes,
+				"TotalSize", G_TYPE_UINT64, stats->total_size,
+				"TotalISize", G_TYPE_UINT64, stats->total_isize,
+				"TotalDSize", G_TYPE_UINT64, stats->total_dsize,
+				"CurrentGOP", G_TYPE_UINT64, stats->current_gop,	
+				"CurrentFrameCount", G_TYPE_UINT64, stats->current_frame_count,
+				"CurrentIFrameCount", G_TYPE_UINT64, stats->current_iframe_count,
+				"CurrentDFrameCount", G_TYPE_UINT64, stats->current_dframe_count,
+				"CurrentFrameSize", G_TYPE_UINT64, stats->current_frame_size,
+				"CurrentIFrameSize", G_TYPE_UINT64, stats->current_iframe_size,
+				"CurrentDFrameSize", G_TYPE_UINT64, stats->current_dframe_size,
+				"LargestFrame", G_TYPE_UINT64, stats->largest_frame,
+				"LargestIFrame", G_TYPE_UINT64, stats->largest_iframe,
+				"LargestDFramge", G_TYPE_UINT64, stats->largest_dframe,
+				"LargestGOP", G_TYPE_UINT64, stats->largest_gop,
+				"SmallestFrame", G_TYPE_UINT64, stats->smallest_frame,
+				"SmallestIFrame", G_TYPE_UINT64, stats->smallest_iframe,
+				"SmallestDFramge", G_TYPE_UINT64, stats->smallest_dframe,
+				"SmallestGOP", G_TYPE_UINT64, stats->smallest_gop,
+				
+			NULL);
+			GstMessage *msg = gst_message_new_element(GST_OBJECT(stats), data);
+			gst_element_post_message(GST_ELEMENT_CAST(stats), msg);
+		}
 	}
 	return gst_pad_push (stats->srcpad, buf);
 }
@@ -369,6 +408,7 @@ static void PipeStats_init (PipeStats *stats)
 
 	stats->silent = FALSE;
 	stats->period = 5;
+	stats->bus = TRUE;
 
 	PipeStats_Reset(stats);
 }

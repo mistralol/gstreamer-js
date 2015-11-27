@@ -33,6 +33,7 @@ struct _PipeStats
 
 	/* Properties */
 	gboolean silent;
+	gboolean bus;
 	guint period;
 
 	/* Data */
