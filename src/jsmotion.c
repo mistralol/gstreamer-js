@@ -57,7 +57,7 @@ static void JSMotion_get_property (GObject *object, guint prop_id, GValue *value
 static GstFlowReturn JSMotion_chain (GstPad *pad, GstObject *parent, GstBuffer *buf)
 {
 	JSMotion *this = GST_JSMOTION(parent);
-	
+
 	if (this->last_frame == NULL)
 	{
 		GST_INFO("Took new reference frame");
@@ -92,6 +92,7 @@ static GstFlowReturn JSMotion_chain (GstPad *pad, GstObject *parent, GstBuffer *
 		outputinfo.data[x] = outputinfo.data[x] - lastinfo.data[x];
 		if (outputinfo.data[x] < 0)
 			outputinfo.data[x] *= -1;
+		outputinfo.data[x] /= 4;
 	}
 
 	gst_buffer_unmap(this->last_frame, &lastinfo);
