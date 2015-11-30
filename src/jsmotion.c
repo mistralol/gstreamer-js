@@ -151,7 +151,10 @@ static gboolean JSMotion_event (GstPad *pad, GstObject *parent, GstEvent  *event
 
 static void JSMotion_Finalize(GObject *object)
 {
-//	JSMotion *this = GST_JSMOTION(object);
+	JSMotion *this = GST_JSMOTION(object);
+	
+	if (this->last_frame)
+		gst_buffer_unref(this->last_frame);
 
 }
 
