@@ -58,45 +58,57 @@ static GstFlowReturn JSMotion_chain (GstPad *pad, GstObject *parent, GstBuffer *
 {
 	JSMotion *this = GST_JSMOTION(parent);
 
-	if (this->last_frame == NULL)
-	{
-		GST_INFO("Took new reference frame");
-		this->last_frame = gst_buffer_ref(buf);
-		return gst_pad_push (this->srcpad, buf);
-	}
-
-	GstBuffer *output = gst_buffer_make_writable(buf);
+	GstBuffer *output = gst_buffer_copy(buf);
 	if (output == NULL)
 		return GST_FLOW_ERROR;
 
-	//Now we can hack it apart.
-	GstMapInfo outputinfo;
-	if (gst_buffer_map(output, &outputinfo, GST_MAP_WRITE) == FALSE)
+	if (this->last_frame != NULL)
 	{
-		gst_buffer_unref(output);
-		return GST_FLOW_ERROR;
+		GstMapInfo outputinfo;
+		if (gst_buffer_map(output, &outputinfo, GST_MAP_WRITE) == FALSE)
+		{
+			gst_buffer_unref(output);
+			return GST_FLOW_ERROR;
+		}
+
+		GstMapInfo lastinfo;
+		gst_buffer_map(this->last_frame, &lastinfo, GST_MAP_READ);
+
+		if (lastinfo.size != outputinfo.size)
+		{
+			GST_ERROR("lastinfo.size != tmpinfo.size");
+			return GST_FLOW_OK;
+		}
+
+		for(gsize x = 0;x < outputinfo.size;x += 3)
+		{
+			outputinfo.data[x] = ABS(outputinfo.data[x] - lastinfo.data[x]);
+			outputinfo.data[x+1] = ABS(outputinfo.data[x+1] - lastinfo.data[x+1]);
+			outputinfo.data[x+2] = ABS(outputinfo.data[x+2] - lastinfo.data[x+2]);
+
+			guint sense = 32;
+			if (outputinfo.data[x] > sense || outputinfo.data[x+1] > sense || outputinfo.data[x+2] > sense)
+			{
+				outputinfo.data[x] = 255;
+				outputinfo.data[x+1] = 255;
+				outputinfo.data[x+2] = 255;
+			}
+			else
+			{
+				outputinfo.data[x] = 0;
+				outputinfo.data[x+1] = 0;
+				outputinfo.data[x+2] = 0;
+			}
+		}
+
+		gst_buffer_unmap(this->last_frame, &lastinfo);
+		gst_buffer_unmap(output, &outputinfo);
+
+		gst_buffer_unref(this->last_frame);
+		this->last_frame = NULL;
 	}
 
-	GstMapInfo lastinfo;
-	gst_buffer_map(this->last_frame, &lastinfo, GST_MAP_READ);
-
-	if (lastinfo.size != outputinfo.size)
-	{
-		GST_ERROR("lastinfo.size != tmpinfo.size");
-		return GST_FLOW_OK;
-	}
-
-	GST_INFO("Size: %lu MySize: %d", outputinfo.size, this->width * this->height * 3);
-	for(gsize x = 0;x < outputinfo.size;x++)
-	{
-		outputinfo.data[x] = outputinfo.data[x] - lastinfo.data[x];
-		if (outputinfo.data[x] < 0)
-			outputinfo.data[x] *= -1;
-		outputinfo.data[x] /= 4;
-	}
-
-	gst_buffer_unmap(this->last_frame, &lastinfo);
-	gst_buffer_unmap(output, &outputinfo);
+	this->last_frame = buf;
 
 	return gst_pad_push (this->srcpad, output);
 }
