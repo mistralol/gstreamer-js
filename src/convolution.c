@@ -194,7 +194,6 @@ static void Convolution_init (Convolution *this)
 	this->kernel.data[6] = 1.0f;
 	this->kernel.data[7] = 1.0f;
 	this->kernel.data[8] = 1.0f;
-	this->kernel.data[9] = 1.0f;
 	this->kernel.div = 9;
 	this->kernel.width = 3;
 	this->kernel.height = 3;
