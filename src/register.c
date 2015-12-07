@@ -13,6 +13,7 @@
 #include "bufferspike.h"
 #include "dumpcaps.h"
 #include "jsmotion.h"
+#include "convolution.h"
 
 
 static gboolean Register_init (GstPlugin *data)
@@ -45,6 +46,9 @@ static gboolean Register_init (GstPlugin *data)
 		return FALSE;
 		
 	if (InitJSMotion(data) == FALSE)
+		return FALSE;
+		
+	if (InitConvolution(data) == FALSE)
 		return FALSE;
 
 	return TRUE;

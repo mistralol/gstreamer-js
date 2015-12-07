@@ -12,6 +12,7 @@ libgstreamerjs_la_SOURCES=bufferjitter.c \
 		pipestats.c \
 		dumpcaps.c \
 		jsmotion.c \
+		convolution.c \
 		register.c
 
 libgstreamerjs_la_CFLAGS = -Wall -Werror $(GST_CFLAGS)
