@@ -58,15 +58,7 @@ static void Convolution_get_property (GObject *object, guint prop_id, GValue *va
 	}
 }
 
-struct CKernel
-{
-	float *data;
-	float div;
-	int width;
-	int height;
-};
-
-static gboolean Convolution_RGB(Convolution *this, GstBuffer *buffer, const struct CKernel *kernel)
+static gboolean Convolution_RGB(Convolution *this, GstBuffer *buffer, const ConvolutionKernel *kernel)
 {
 	GstMapInfo info;
 	
@@ -113,17 +105,7 @@ static GstFlowReturn Convolution_chain (GstPad *pad, GstObject *parent, GstBuffe
 	if (output == NULL)
 		return GST_FLOW_ERROR;
 
-	//float data[] = {-1, -1, -1, -1, 8, -1, -1, -1, -1};
-	float data[] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
-	//float data[] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-	//float data[] = {0, 0, 0, -1, 1, 0, 0, 0, 0};
-	struct CKernel kernel;
-	kernel.data = data;
-	kernel.div = 9;
-	kernel.width = 3;
-	kernel.height = 3;
-
-	if (Convolution_RGB(this, output, &kernel) == FALSE)
+	if (Convolution_RGB(this, output, &this->kernel) == FALSE)
 	{
 		gst_buffer_unref(output);
 		return GST_FLOW_ERROR;
@@ -170,8 +152,11 @@ static gboolean Convolution_event (GstPad *pad, GstObject *parent, GstEvent  *ev
 
 static void Convolution_Finalize(GObject *object)
 {
-//	Convolution *this = GST_CONVOLUTION(object);
+	Convolution *this = GST_CONVOLUTION(object);
 	
+	if (this->kernel.data)
+		g_free(this->kernel.data);
+
 }
 
 /* initialize the new element
@@ -183,9 +168,36 @@ static void Convolution_init (Convolution *this)
 {
 	this->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
 	this->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
-	
+
+	//Basic simple kernel	
+	this->kernel.data = g_malloc(sizeof(float));
+	this->kernel.data[0] = 1.0f;
+	this->kernel.div = 1;
+	this->kernel.width = 1;
+	this->kernel.height = 1;
+
 	this->width = 0;
 	this->height = 0;
+	
+	//FIXME: Set this from a property
+	//float data[] = {-1, -1, -1, -1, 8, -1, -1, -1, -1};
+	//float data[] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+	//float data[] = {0, 0, 0, -1, 1, 0, 0, 0, 0};
+	g_free(this->kernel.data);
+	this->kernel.data = g_malloc(sizeof(float) * 9);
+	this->kernel.data[0] = 1.0f;
+	this->kernel.data[1] = 1.0f;
+	this->kernel.data[2] = 1.0f;
+	this->kernel.data[3] = 1.0f;
+	this->kernel.data[4] = 1.0f;
+	this->kernel.data[5] = 1.0f;
+	this->kernel.data[6] = 1.0f;
+	this->kernel.data[7] = 1.0f;
+	this->kernel.data[8] = 1.0f;
+	this->kernel.data[9] = 1.0f;
+	this->kernel.div = 9;
+	this->kernel.width = 3;
+	this->kernel.height = 3;
 	
 	GST_PAD_SET_PROXY_CAPS(this->sinkpad);
 	GST_PAD_SET_PROXY_CAPS(this->srcpad);

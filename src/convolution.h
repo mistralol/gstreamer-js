@@ -22,6 +22,16 @@ G_BEGIN_DECLS
 #define GST_IS_CONVOLUTION_CLASS(klass) \
   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_CONVOLUTION))
 
+typedef struct _ConvolutionKernel ConvolutionKernel;
+
+struct _ConvolutionKernel
+{
+	float *data;
+	float div;
+	int width;
+	int height;
+};
+
 typedef struct _Convolution Convolution;
 typedef struct _ConvolutionClass ConvolutionClass;
 
@@ -30,6 +40,8 @@ struct _Convolution
 	GstElement element;
 	GstPad *sinkpad;
 	GstPad *srcpad;
+
+	ConvolutionKernel kernel;
 
 	int width;
 	int height;
