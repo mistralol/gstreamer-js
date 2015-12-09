@@ -26,11 +26,18 @@ typedef struct _ConvolutionKernel ConvolutionKernel;
 
 struct _ConvolutionKernel
 {
-	float *data;
-	float div;
-	int width;
-	int height;
+	gfloat *data;
+	gfloat div;
+	guint width;
+	guint height;
 };
+
+typedef enum
+{
+	Kernel_Identity,
+	Kernel_BoxBlur,
+	Kernel_Custom
+} ConvolutionKernelType;
 
 typedef struct _Convolution Convolution;
 typedef struct _ConvolutionClass ConvolutionClass;
@@ -41,10 +48,14 @@ struct _Convolution
 	GstPad *sinkpad;
 	GstPad *srcpad;
 
+	ConvolutionKernelType KernelType;
 	ConvolutionKernel kernel;
+	gboolean KernelValid;
 
-	int width;
-	int height;
+	gchar *custom;
+
+	guint width;
+	guint height;
 };
 
 struct _ConvolutionClass 

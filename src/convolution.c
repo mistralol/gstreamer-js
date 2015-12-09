@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
+#include <math.h>
 
 #include <gst/gst.h>
 #include <gst/video/video.h>
@@ -15,11 +16,31 @@ GST_DEBUG_CATEGORY_STATIC (convolution_debug);
 enum
 {
   PROP_SILENT = 1,
+  PROP_KERNEL,
+  PROP_CUSTOMKERNEL,
   LAST_SIGNAL
 };
 
 #define convolution_parent_class parent_class
 G_DEFINE_TYPE (Convolution, Convolution, GST_TYPE_ELEMENT);
+
+//Define our enum type for normal kernels.
+#define ConvolutionKernelType (ConvolutionKernelTypeGetType())
+static GType ConvolutionKernelTypeGetType()
+{
+	static GType type = 0;
+	static const GEnumValue KernelType[] = {
+		{Kernel_Identity, "Identity {1}", "Identity"},
+		{Kernel_BoxBlur, "BoxBlur {1, 1, 1} {1, 1, 1} {1, 1, 1}", "BoxBlur"},
+		{0, NULL, NULL}
+	};
+
+	if (!type)
+	{
+		type = g_enum_register_static("ConvolutionKernelType", KernelType);
+	}
+	return type;
+}
 
 
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE (
@@ -36,11 +57,125 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE (
     GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE("RGB"))
 );
 
+static void ConvolutionKernelParse(Convolution *this, const gchar *kernel)
+{
+	//Free existing Kernel.
+	g_free(this->kernel.data);
+	this->kernel.data = 0;
+	this->kernel.width = 0;
+	this->kernel.height = 0;
+	this->kernel.div = 0;
+	this->KernelValid = FALSE;
+
+	GST_INFO("Parsing New Kernel %s", kernel);
+
+	//Parse data
+	gchar *str = g_strdup(kernel);
+
+	//Check the string
+	gchar *tmp = str;
+	guint commas = 0;
+
+	while(*tmp != 0)
+	{
+		if (!((*tmp > '0' && *tmp < '9') || *tmp == ',' || *tmp == '.'))
+		{
+			g_free(str);
+			return;
+		}
+		if (*tmp == ',')
+		{
+			commas++;
+		}
+		tmp++;
+	}
+
+	this->kernel.data = g_malloc(sizeof(float) * (commas + 1));
+	guint idx = 0; //Marks current item we are paring
+
+	//Search the string and find each ',' then set it to null
+	//Then move base pointer forward.
+	//If we don't find the comma then we are on the last item
+
+	gchar *base = str;
+	tmp = str;
+
+	for(guint i=0;i<commas + 1;i++)
+	{
+		while(*tmp != ',' && *tmp != 0)
+			tmp++;
+		*tmp = 0;
+		this->kernel.data[idx] = (gfloat) g_ascii_strtod(base, NULL);
+		idx++;
+		tmp++;
+		base = tmp;
+	}
+
+	//Figure our width / height. They should be the same!
+	int z = sqrt(commas + 1);
+	if (z * z != commas + 1)
+	{
+		g_free(str);
+		return;
+	}
+
+	if (z != 1)
+	{
+		if ((z % 2) != 1)
+		{
+			GST_WARNING("Kernel is not odd sized %d", z);
+			g_free(str);
+			return;
+		}
+	}
+
+	this->kernel.width = z;
+	this->kernel.height = z;
+
+	//Sum The items in the kernel for our divide
+	gfloat sum = 0.0f;
+	for(guint i = 0; i < this->kernel.width * this->kernel.height; i++)
+	{
+		sum += this->kernel.data[i];
+	}
+	this->kernel.div = sum;
+
+	GST_INFO("New Kernel %d %d Divide: %f", this->kernel.width, this->kernel.height, this->kernel.div);
+
+	this->KernelValid = TRUE;
+	g_free(str);
+}
+
+static void ConvolutionKernelSetup(Convolution *this)
+{
+	switch(this->KernelType)
+	{
+		case Kernel_Identity:
+			ConvolutionKernelParse(this, "1");
+			break;
+		case Kernel_BoxBlur:
+			ConvolutionKernelParse(this, "1,1,1,1,1,1,1,1,1");
+			break;
+		case Kernel_Custom:
+			ConvolutionKernelParse(this, this->custom);
+			break;
+	}
+}
+
 static void Convolution_set_property (GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
-//	Convolution *this = GST_CONVOLUTION (object);
+	Convolution *this = GST_CONVOLUTION (object);
 
 	switch (prop_id) {
+		case PROP_KERNEL:
+			this->KernelType = g_value_get_enum(value);
+			ConvolutionKernelSetup(this);
+			break;
+		case PROP_CUSTOMKERNEL:
+			g_free(this->custom);
+			this->custom = g_strdup(g_value_get_string(value));
+			ConvolutionKernelSetup(this);
+			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 			break;
@@ -49,9 +184,15 @@ static void Convolution_set_property (GObject *object, guint prop_id, const GVal
 
 static void Convolution_get_property (GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
-//	Convolution *this = GST_CONVOLUTION (object);
+	Convolution *this = GST_CONVOLUTION (object);
 
 	switch (prop_id) {
+		case PROP_KERNEL:
+			g_value_set_enum(value, this->KernelType);
+			break;
+		case PROP_CUSTOMKERNEL:
+			g_value_set_string(value, this->custom);
+			break;
 		default:
 			G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 			break;
@@ -101,6 +242,13 @@ static GstFlowReturn Convolution_chain (GstPad *pad, GstObject *parent, GstBuffe
 {
 	Convolution *this = GST_CONVOLUTION(parent);
 
+	if (this->KernelValid == FALSE)
+	{
+		GST_ERROR("Invalid convolution kernel");
+		gst_buffer_unref(buf);
+		return GST_FLOW_ERROR;
+	}
+
 	GstBuffer *output = gst_buffer_make_writable(buf);
 	if (output == NULL)
 		return GST_FLOW_ERROR;
@@ -136,9 +284,7 @@ static gboolean Convolution_event (GstPad *pad, GstObject *parent, GstEvent  *ev
 			this->width = info.width;
 			this->height = info.height;
 
-			GstCaps *ncaps = gst_caps_copy(caps);
-			ret = gst_pad_set_caps(this->srcpad, ncaps);
-			gst_caps_unref(ncaps);
+			ret = gst_pad_set_caps(this->srcpad, caps);
 			gst_event_unref(event);
 			break;
 		}
@@ -154,9 +300,8 @@ static void Convolution_Finalize(GObject *object)
 {
 	Convolution *this = GST_CONVOLUTION(object);
 	
-	if (this->kernel.data)
-		g_free(this->kernel.data);
-
+	g_free(this->kernel.data);
+	g_free(this->custom);
 }
 
 /* initialize the new element
@@ -169,35 +314,22 @@ static void Convolution_init (Convolution *this)
 	this->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
 	this->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
 
-	//Basic simple kernel	
-	this->kernel.data = g_malloc(sizeof(float));
-	this->kernel.data[0] = 1.0f;
-	this->kernel.div = 1;
-	this->kernel.width = 1;
-	this->kernel.height = 1;
+	this->KernelType = Kernel_Identity;
+	this->KernelValid = FALSE; //Will be set to TRUE when we first setup
 
+	//Basic simple kernel	
+	this->kernel.data = NULL;
+	this->kernel.div = 0;
+	this->kernel.width = 0;
+	this->kernel.height = 0;
+	this->custom = NULL;
+
+	ConvolutionKernelSetup(this);
+
+	//Width / Height is buffer size setup when we get caps
 	this->width = 0;
 	this->height = 0;
-	
-	//FIXME: Set this from a property
-	//float data[] = {-1, -1, -1, -1, 8, -1, -1, -1, -1};
-	//float data[] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-	//float data[] = {0, 0, 0, -1, 1, 0, 0, 0, 0};
-	g_free(this->kernel.data);
-	this->kernel.data = g_malloc(sizeof(float) * 9);
-	this->kernel.data[0] = 1.0f;
-	this->kernel.data[1] = 1.0f;
-	this->kernel.data[2] = 1.0f;
-	this->kernel.data[3] = 1.0f;
-	this->kernel.data[4] = 1.0f;
-	this->kernel.data[5] = 1.0f;
-	this->kernel.data[6] = 1.0f;
-	this->kernel.data[7] = 1.0f;
-	this->kernel.data[8] = 1.0f;
-	this->kernel.div = 9;
-	this->kernel.width = 3;
-	this->kernel.height = 3;
-	
+
 	GST_PAD_SET_PROXY_CAPS(this->sinkpad);
 	GST_PAD_SET_PROXY_CAPS(this->srcpad);
 
@@ -220,6 +352,12 @@ static void Convolution_class_init (ConvolutionClass *klass)
 	gobject_class->finalize = Convolution_Finalize;
 	gobject_class->set_property = Convolution_set_property;
 	gobject_class->get_property = Convolution_get_property;
+
+	g_object_class_install_property(gobject_class, PROP_CUSTOMKERNEL,
+		g_param_spec_string("custom_kernel", "Custom Kernel", "Setup a custom convolution kernel (matrix) with comma seperated values it must be square and have odd width / height", NULL, G_PARAM_READWRITE));
+
+	g_object_class_install_property(gobject_class, PROP_KERNEL,
+		g_param_spec_enum("kernel", "Kernel Type", "Set the convolution kernel type", ConvolutionKernelType, Kernel_Identity, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
 	gst_element_class_set_details_simple(gstelement_class,
 		"Convolution",
