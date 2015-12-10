@@ -1,7 +1,4 @@
 
-#include <stdio.h>
-#include <time.h>
-#include <unistd.h>
 #include <math.h>
 
 #include <gst/gst.h>
