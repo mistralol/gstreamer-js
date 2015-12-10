@@ -36,6 +36,7 @@ typedef enum
 {
 	Kernel_Identity,
 	Kernel_BoxBlur,
+	Kernel_GaussianBlur,
 	Kernel_Custom
 } ConvolutionKernelType;
 
