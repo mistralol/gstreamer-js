@@ -32,6 +32,7 @@ static GType ConvolutionKernelTypeGetType()
 	static const GEnumValue KernelType[] = {
 		{Kernel_Identity, "Identity {1}", "Identity"},
 		{Kernel_BoxBlur, "BoxBlur {1, 1, 1} {1, 1, 1} {1, 1, 1}", "BoxBlur"},
+		{Kernel_Custom, "Custom Kernel property is user", "Custom"},
 		{0, NULL, NULL}
 	};
 
@@ -78,9 +79,10 @@ static void ConvolutionKernelParse(Convolution *this, const gchar *kernel)
 
 	while(*tmp != 0)
 	{
-		if (!((*tmp > '0' && *tmp < '9') || *tmp == ',' || *tmp == '.'))
+		if (!((*tmp >= '0' && *tmp <= '9') || *tmp == ',' || *tmp == '.' || *tmp == '-'))
 		{
 			g_free(str);
+			GST_ERROR("Kernel has invalid char %s", tmp);
 			return;
 		}
 		if (*tmp == ',')
@@ -116,6 +118,7 @@ static void ConvolutionKernelParse(Convolution *this, const gchar *kernel)
 	if (z * z != commas + 1)
 	{
 		g_free(str);
+		GST_ERROR("Kernel has invalid width / height %dx%d", z, z);
 		return;
 	}
 
@@ -199,41 +202,55 @@ static void Convolution_get_property (GObject *object, guint prop_id, GValue *va
 	}
 }
 
-static gboolean Convolution_RGB(Convolution *this, GstBuffer *buffer, const ConvolutionKernel *kernel)
+static gboolean Convolution_RGB(Convolution *this, GstBuffer *buffer, GstBuffer *output, const ConvolutionKernel *kernel)
 {
-	GstMapInfo info;
+	GstMapInfo infobuf, infoout;
 	
-	if (gst_buffer_map(buffer, &info, GST_MAP_WRITE) == FALSE)
+	if (gst_buffer_map(buffer, &infobuf, GST_MAP_READ) == FALSE)
 		return FALSE;
 
-	for(int y = kernel->height; y < this->height - kernel->height; y++)
+	if (gst_buffer_map(output, &infoout, GST_MAP_WRITE) == FALSE)
 	{
-		for(int x = kernel->width; x < this->width - kernel->width; x++)
+		gst_buffer_unmap(buffer, &infobuf);
+		return FALSE;
+	}
+
+	int hkwidth = kernel->width / 2;
+	int hkheight = kernel->height / 2;
+
+	for(int y = hkheight; y < this->height - hkheight; y++)
+	{
+		for(int x = hkwidth; x < this->width - hkwidth; x++)
 		{
 			float sum1 = 0.0f, sum2 = 0.0f, sum3 = 0.0f;
 
 			for(int i = 0; i < kernel->height; i++)
 			{
-				for(int j=0;j<kernel->width;j++)
+				for(int j=0; j < kernel->width;j++)
 				{
-					int py = y;// - kernel->height + i; //Figure out pixel locations
-					int px = x;// - kernel->width + j;
+					int py = y - hkheight + i; //Figure out pixel locations
+					int px = x - hkwidth + j;
 					
-					sum1 += info.data[(py * this->width * 3) + (px * 3)] * kernel->data[(i * kernel->width) + j];
-					sum2 += info.data[(py * this->width * 3) + (px * 3) + 1] * kernel->data[(i * kernel->width) + j];
-					sum3 += info.data[(py * this->width * 3) + (px * 3) + 2] * kernel->data[(i * kernel->width) + j];					
+					sum1 += infobuf.data[(py * this->width * 3) + (px * 3)] * kernel->data[(i * kernel->width) + j];
+					sum2 += infobuf.data[(py * this->width * 3) + (px * 3) + 1] * kernel->data[(i * kernel->width) + j];
+					sum3 += infobuf.data[(py * this->width * 3) + (px * 3) + 2] * kernel->data[(i * kernel->width) + j];
 				}
 			}
-			sum1 /= kernel->div;
-			sum2 /= kernel->div;
-			sum3 /= kernel->div;
-			info.data[(y * this->width * 3) + (x * 3)] = ABS((int) sum1);
-			info.data[(y * this->width * 3) + (x * 3) + 1] = ABS((int) sum2);
-			info.data[(y * this->width * 3) + (x * 3) + 2] = ABS((int) sum3);
+			if (kernel->div > 0)
+			{
+				sum1 /= kernel->div;
+				sum2 /= kernel->div;
+				sum3 /= kernel->div;
+			}
+
+			infoout.data[(y * this->width * 3) + (x * 3)] = (guint8) fabs(sum1);
+			infoout.data[(y * this->width * 3) + (x * 3) + 1] = (guint8) fabs(sum2);
+			infoout.data[(y * this->width * 3) + (x * 3) + 2] = (guint8) fabs(sum3);
 		}
 	}
 	
-	gst_buffer_unmap(buffer, &info);
+	gst_buffer_unmap(buffer, &infobuf);
+	gst_buffer_unmap(output, &infoout);
 	
 	return TRUE;
 }
@@ -249,16 +266,21 @@ static GstFlowReturn Convolution_chain (GstPad *pad, GstObject *parent, GstBuffe
 		return GST_FLOW_ERROR;
 	}
 
-	GstBuffer *output = gst_buffer_make_writable(buf);
+	GstBuffer *output = gst_buffer_copy(buf);
 	if (output == NULL)
-		return GST_FLOW_ERROR;
-
-	if (Convolution_RGB(this, output, &this->kernel) == FALSE)
 	{
+		gst_buffer_unref(buf);
+		return GST_FLOW_ERROR;
+	}
+
+	if (Convolution_RGB(this, buf, output, &this->kernel) == FALSE)
+	{
+		gst_buffer_unref(buf);
 		gst_buffer_unref(output);
 		return GST_FLOW_ERROR;
 	}
 
+	gst_buffer_unref(buf);
 	return gst_pad_push (this->srcpad, output);
 }
 
@@ -322,7 +344,7 @@ static void Convolution_init (Convolution *this)
 	this->kernel.div = 0;
 	this->kernel.width = 0;
 	this->kernel.height = 0;
-	this->custom = NULL;
+	this->custom = g_strdup("1");
 
 	ConvolutionKernelSetup(this);
 
