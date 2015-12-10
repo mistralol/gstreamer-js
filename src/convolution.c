@@ -30,6 +30,9 @@ static GType ConvolutionKernelTypeGetType()
 		{Kernel_Identity, "Identity {1}", "Identity"},
 		{Kernel_BoxBlur, "BoxBlur {1, 1, 1} {1, 1, 1} {1, 1, 1}", "BoxBlur"},
 		{Kernel_GaussianBlur, "GaussianBlur {1, 2, 1} {2, 4, 2} {1, 2, 1}", "GaussianBlur"},
+		{Kernel_Sharpen, "Sharpen {0, -1, 0} {-1, 5, -1} {0, -1, 0}", "Sharpen"},
+		{Kernel_EdgeDetect, "Edge Detect {0, 1, 0} {1, -4, 1} {0, 1, 0}", "EdgeDetect"},
+		{Kernel_Emboss, "Emboss {-2, -1, 0} {-1, 1, 1} {0, 1, 2}", "Emboss"},
 		{Kernel_Custom, "Custom Kernel property is used", "Custom"},
 		{0, NULL, NULL}
 	};
@@ -159,6 +162,15 @@ static void ConvolutionKernelSetup(Convolution *this)
 			break;
 		case Kernel_GaussianBlur:
 			ConvolutionKernelParse(this, "1,2,1,2,4,2,1,2,1");
+			break;
+		case Kernel_Sharpen:
+			ConvolutionKernelParse(this, "0,-1,0,-1,5,-1,0,-1,0");
+			break;
+		case Kernel_EdgeDetect:
+			ConvolutionKernelParse(this, "0,1,0,1,-4,1,0,1,0");
+			break;
+		case Kernel_Emboss:
+			ConvolutionKernelParse(this, "-2,-1,0,-1,1,1,0,1,2");
 			break;
 		case Kernel_Custom:
 			ConvolutionKernelParse(this, this->custom);
