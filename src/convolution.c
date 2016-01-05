@@ -49,14 +49,14 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE (
 	"sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE("RGB"))
+    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE("{ RGB, GRAY8 }"))
 );
 
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE (
 	"src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE("RGB"))
+    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE("{ RGB, GRAY8 }"))
 );
 
 static void ConvolutionKernelParse(Convolution *this, const gchar *kernel)
@@ -215,6 +215,53 @@ static void Convolution_get_property (GObject *object, guint prop_id, GValue *va
 	}
 }
 
+static gboolean Convolution_GRAY8(Convolution *this, GstBuffer *buffer, GstBuffer *output, const ConvolutionKernel *kernel)
+{
+	GstMapInfo infobuf, infoout;
+	
+	if (gst_buffer_map(buffer, &infobuf, GST_MAP_READ) == FALSE)
+		return FALSE;
+
+	if (gst_buffer_map(output, &infoout, GST_MAP_WRITE) == FALSE)
+	{
+		gst_buffer_unmap(buffer, &infobuf);
+		return FALSE;
+	}
+
+	int hkwidth = kernel->width / 2;
+	int hkheight = kernel->height / 2;
+
+	for(int y = hkheight; y < this->height - hkheight; y++)
+	{
+		for(int x = hkwidth; x < this->width - hkwidth; x++)
+		{
+			float sum = 0.0f;
+
+			for(int i = 0; i < kernel->height; i++)
+			{
+				for(int j=0; j < kernel->width;j++)
+				{
+					int py = y - hkheight + i; //Figure out pixel locations
+					int px = x - hkwidth + j;
+					
+					sum += infobuf.data[(py * this->width) + (px)] * kernel->data[(i * kernel->width) + j];
+				}
+			}
+			if (kernel->div > 0)
+			{
+				sum /= kernel->div;
+			}
+
+			infoout.data[(y * this->width) + x] = (guint8) fabs(sum);
+		}
+	}
+	
+	gst_buffer_unmap(buffer, &infobuf);
+	gst_buffer_unmap(output, &infoout);
+	
+	return TRUE;
+}
+
 static gboolean Convolution_RGB(Convolution *this, GstBuffer *buffer, GstBuffer *output, const ConvolutionKernel *kernel)
 {
 	GstMapInfo infobuf, infoout;
@@ -286,11 +333,33 @@ static GstFlowReturn Convolution_chain (GstPad *pad, GstObject *parent, GstBuffe
 		return GST_FLOW_ERROR;
 	}
 
-	if (Convolution_RGB(this, buf, output, &this->kernel) == FALSE)
+	switch (this->Mode)
 	{
-		gst_buffer_unref(buf);
-		gst_buffer_unref(output);
-		return GST_FLOW_ERROR;
+		case Unknown:
+			gst_buffer_unref(output);
+			gst_buffer_unref(buf);
+			return GST_FLOW_ERROR;
+			break;
+		case RGB:
+			if (Convolution_RGB(this, buf, output, &this->kernel) == FALSE)
+			{
+				gst_buffer_unref(buf);
+				gst_buffer_unref(output);
+				return GST_FLOW_ERROR;
+			}
+			break;
+		case GRAY8:
+			if (Convolution_GRAY8(this, buf, output, &this->kernel) == FALSE)
+			{
+				gst_buffer_unref(buf);
+				gst_buffer_unref(output);
+				return GST_FLOW_ERROR;
+			}
+			break;
+		default:
+			gst_buffer_unref(output);
+			gst_buffer_unref(buf);
+			return GST_FLOW_ERROR;
 	}
 
 	gst_buffer_unref(buf);
@@ -315,6 +384,20 @@ static gboolean Convolution_event (GstPad *pad, GstObject *parent, GstEvent  *ev
 				gst_event_unref(event);
 				return FALSE;
 			}
+			
+			switch(info.finfo->format)
+			{
+				case GST_VIDEO_FORMAT_RGB:
+					this->Mode = RGB;
+					break;
+				case GST_VIDEO_FORMAT_GRAY8:
+					this->Mode = GRAY8;
+					break;
+				default:
+					this->Mode = Unknown;
+					break;
+			}
+			
 			GST_INFO("New Width: %d Height: %d", info.width, info.height);
 			this->width = info.width;
 			this->height = info.height;
@@ -349,6 +432,7 @@ static void Convolution_init (Convolution *this)
 	this->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
 	this->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
 
+	this->Mode = Unknown;
 	this->KernelType = Kernel_Identity;
 	this->KernelValid = FALSE; //Will be set to TRUE when we first setup
 

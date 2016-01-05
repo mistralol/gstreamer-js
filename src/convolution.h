@@ -32,6 +32,13 @@ struct _ConvolutionKernel
 	guint height;
 };
 
+typedef enum 
+{
+	Unknown,
+	RGB,
+	GRAY8
+} ConvolutionMode;
+
 typedef enum
 {
 	Kernel_Identity,
@@ -52,6 +59,7 @@ struct _Convolution
 	GstPad *sinkpad;
 	GstPad *srcpad;
 
+	ConvolutionMode Mode;
 	ConvolutionKernelType KernelType;
 	ConvolutionKernel kernel;
 	gboolean KernelValid;
