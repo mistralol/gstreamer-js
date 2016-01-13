@@ -58,26 +58,48 @@ static GstFlowReturn JSMotion_chain (GstPad *pad, GstObject *parent, GstBuffer *
 {
 	JSMotion *this = GST_JSMOTION(parent);
 
-	GstBuffer *output = gst_buffer_copy(buf);
-	if (output == NULL)
+	GstBuffer *copy = gst_buffer_copy(buf);
+	if (copy == NULL)
+	{
+		gst_buffer_unref(buf);
 		return GST_FLOW_ERROR;
-
+	}
+	
+	GstBuffer *output = gst_buffer_make_writable(buf);
+	if (output == NULL)
+	{
+		gst_buffer_unref(copy);
+		gst_buffer_unref(buf);
+		return GST_FLOW_ERROR;
+	}
+		
 	if (this->last_frame != NULL)
 	{
 		GstMapInfo outputinfo;
 		if (gst_buffer_map(output, &outputinfo, GST_MAP_WRITE) == FALSE)
 		{
 			gst_buffer_unref(output);
+			gst_buffer_unref(copy);
 			return GST_FLOW_ERROR;
 		}
 
 		GstMapInfo lastinfo;
-		gst_buffer_map(this->last_frame, &lastinfo, GST_MAP_READ);
+		if (gst_buffer_map(this->last_frame, &lastinfo, GST_MAP_READ)) == FALSE)
+		{
+			gst_buffer_unmap(output, &outputinfo);
+			gst_buffer_unref(output);
+			gst_buffer_unref(copy);
+			return GST_FLOW_ERROR;
+		}
 
 		if (lastinfo.size != outputinfo.size)
 		{
 			GST_ERROR("lastinfo.size != tmpinfo.size");
-			return GST_FLOW_OK;
+			gst_buffer_unmap(this->last_frame, &lastinfo);
+			gst_buffer_unmap(output, &outputinfo);
+			gst_buffer_unref(output);
+			gst_buffer_unref(copy);
+			return GST_FLOW_ERROR;
 		}
 
 		for(gsize x = 0;x < outputinfo.size;x += 3)
@@ -101,14 +123,13 @@ static GstFlowReturn JSMotion_chain (GstPad *pad, GstObject *parent, GstBuffer *
 			}
 		}
 
-		gst_buffer_unmap(this->last_frame, &lastinfo);
 		gst_buffer_unmap(output, &outputinfo);
-
+		gst_buffer_unmap(this->last_frame, &lastinfo);
 		gst_buffer_unref(this->last_frame);
 		this->last_frame = NULL;
 	}
 
-	this->last_frame = buf;
+	this->last_frame = copy;
 
 	return gst_pad_push (this->srcpad, output);
 }
@@ -135,9 +156,7 @@ static gboolean JSMotion_event (GstPad *pad, GstObject *parent, GstEvent  *event
 			this->width = info.width;
 			this->height = info.height;
 
-			GstCaps *ncaps = gst_caps_copy(caps);
-			ret = gst_pad_set_caps(this->srcpad, ncaps);
-			gst_caps_unref(ncaps);
+			ret = gst_pad_set_caps(this->srcpad, caps);
 			gst_event_unref(event);
 			break;
 		}
@@ -170,16 +189,12 @@ static void JSMotion_init (JSMotion *this)
 	
 	this->last_frame = NULL;
 
-	GST_PAD_SET_PROXY_CAPS(this->sinkpad);
-	GST_PAD_SET_PROXY_CAPS(this->srcpad);
-
 	gst_pad_set_event_function (this->sinkpad, JSMotion_event);
 	gst_pad_set_chain_function (this->sinkpad, JSMotion_chain);
 
 	gst_element_add_pad (GST_ELEMENT (this), this->sinkpad);
 	gst_element_add_pad (GST_ELEMENT (this), this->srcpad);
 }
-
 
 static void JSMotion_class_init (JSMotionClass *klass)
 {
