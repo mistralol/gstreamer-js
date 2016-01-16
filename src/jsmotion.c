@@ -84,7 +84,7 @@ static GstFlowReturn JSMotion_chain (GstPad *pad, GstObject *parent, GstBuffer *
 		}
 
 		GstMapInfo lastinfo;
-		if (gst_buffer_map(this->last_frame, &lastinfo, GST_MAP_READ)) == FALSE)
+		if (gst_buffer_map(this->last_frame, &lastinfo, GST_MAP_READ) == FALSE)
 		{
 			gst_buffer_unmap(output, &outputinfo);
 			gst_buffer_unref(output);
