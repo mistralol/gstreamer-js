@@ -408,7 +408,7 @@ static void PipeStats_init (PipeStats *stats)
 
 	stats->silent = FALSE;
 	stats->period = 5;
-	stats->bus = TRUE;
+	stats->bus = FALSE;
 
 	PipeStats_Reset(stats);
 }
@@ -429,6 +429,9 @@ static void PipeStats_class_init (PipeStatsClass *klass)
 
 	g_object_class_install_property (gobject_class, PROP_SILENT,
 		g_param_spec_boolean ("silent", "Silent", "Produce Output about stats on stdout", FALSE, G_PARAM_READWRITE));
+		
+	g_object_class_install_property (gobject_class, PROP_BUS,
+		g_param_spec_boolean ("bus", "bus", "Send bus events", FALSE, G_PARAM_READWRITE));
 
 	g_object_class_install_property (gobject_class, PROP_PERIOD,
 		g_param_spec_int ("period", "Period", "Number of seconds worth of data for calculating averages", 0, 60, 5, G_PARAM_READWRITE));
