@@ -14,7 +14,7 @@
 #include "dumpcaps.h"
 #include "jsmotion.h"
 #include "convolution.h"
-
+#include "vhist.h"
 
 static gboolean Register_init (GstPlugin *data)
 {
@@ -49,6 +49,9 @@ static gboolean Register_init (GstPlugin *data)
 		return FALSE;
 		
 	if (InitConvolution(data) == FALSE)
+		return FALSE;
+		
+	if (InitVHist(data) == FALSE)
 		return FALSE;
 
 	return TRUE;
