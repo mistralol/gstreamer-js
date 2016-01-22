@@ -78,11 +78,29 @@ static GstFlowReturn VHist_chain (GstPad *pad, GstObject *parent, GstBuffer *buf
 
 	guint size = this->width * this->height * 3;
 	guint64 sum = 0;
+
+	for(guint i=0;i<size;i+=3)
+	{
+		//Slow version
+		//float x = (0.2126 * info.data[i]) + (0.7152 * info.data[i+1]) + (0.0722 * info.data[i+2]);
+		//sum += x;
+
+		//Fast Version
+		int Y = info.data[i] + info.data[i] + info.data[i] +
+			info.data[i+1] + info.data[i+1] + info.data[i+1] + info.data[i+1] +
+			info.data[i+2];
+		sum += Y >> 3;
+		
+
+	}
+
+#if 0
 	for(guint i = 0;i<size;i++)
 	{
 		sum += info.data[i];
 	}
 	this->last = sum / size;
+#endif
 	
 	gst_buffer_unmap(buf, &info);
 	
